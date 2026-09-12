@@ -39,6 +39,11 @@ window.BB23_CONFIG = Object.freeze({
     wildcardActive: true
   },
 
+  // Season pacing (assumes a 16-person cast; scales down gracefully).
+  teamWeeks: 4,
+  highRollerWeeks: 4,
+  juryThresholdPlacement: 9,
+
   normalWeekEvents: [
     "hoh",
     "nominations",
@@ -49,12 +54,20 @@ window.BB23_CONFIG = Object.freeze({
     "eviction"
   ],
 
+  highRollerGames: [
+    { type: "bonusVeto", name: "Veto Derby", cost: 50, description: "A shot at a second Power of Veto." },
+    { type: "selfRemoval", name: "Block Buster", cost: 100, description: "The power to remove yourself from the block." },
+    { type: "voteFlip", name: "Power Shift", cost: 150, description: "The power to flip the eviction vote." }
+  ],
+
   notes: [
     "Four-team opening format",
     "Teams are Jokers, Aces, Kings, and Queens",
-    "Team twist operates during the first four weeks",
-    "Wildcard competition operates during the first four weeks",
-    "High Roller's Room is a later-stage feature",
-    "Finale and jury logic are later-stage features"
+    "Team twist and Wildcard Competition operate during weeks 1-4",
+    "Double or Nothing HOH twist runs during the premiere",
+    "High Roller's Room (BB Bucks + powers) runs weeks 5-8",
+    "Jury begins once 9 houseguests remain",
+    "Final 3 uses a three-part competition and a Final HOH decision",
+    "Finale ends in a jury vote for the winner"
   ]
 });
