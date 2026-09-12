@@ -1,66 +1,25 @@
-/*
- * BIG BROTHER SIMULATOR — COMPETITION ENGINE
- *
- * Resolves any competition among a set of houseguests. Winners are
- * decided by rating + randomness ("weighted lottery"), not pure stats
- * and not pure coin flip, so favorites usually do well but upsets
- * happen.
- */
-
-(function () {
-  const CATEGORY_WEIGHTS = [
-    { key: "physical", weight: 0.35 },
-    { key: "mental", weight: 0.30 },
-    { key: "social", weight: 0.15 },
-    { key: "strategic", weight: 0.20 }
-  ];
-
-  const LABELS = {
-    physical: ["Endurance Hang", "Obstacle Course Rush", "Balance Beam Blowout", "Slip-and-Slide Showdown", "Wrecking Ball Wipeout"],
-    mental: ["Memory Wall", "Trivia Takedown", "Puzzle Pieces", "Pattern Recall", "Numbers Game"],
-    social: ["Know Your House", "Read the Room", "Social Circuit", "Who Said It?"],
-    strategic: ["Strategy Grid", "Risk Ledger", "Odds Are...", "The Long Game"]
-  };
-
-  function pickCategory() {
-    const r = Math.random();
-    let acc = 0;
-    for (const c of CATEGORY_WEIGHTS) {
-      acc += c.weight;
-      if (r <= acc) return c.key;
-    }
-    return CATEGORY_WEIGHTS[0].key;
+/* BIG BROTHER 23 — COMPETITION ENGINE */
+(function(){
+  const FALLBACK={physical:.35,mental:.30,social:.15,strategic:.20};
+  function pickCategory(){const r=Math.random();let a=0;for(const [k,w] of Object.entries(FALLBACK)){a+=w;if(r<=a)return k}return "physical";}
+  function scheduleFor(opts){
+    const cfg=window.BB23_CONFIG?.competitionSchedule||[];
+    if(opts.week!=null&&opts.type){const exact=cfg.find(c=>c.week===opts.week&&c.type===opts.type);if(exact)return exact;}
+    return null;
   }
-
-  function competitionLabel(category) {
-    const arr = LABELS[category] || LABELS.physical;
-    return arr[Math.floor(Math.random() * arr.length)];
+  function skillScore(hg,skills){
+    const vals=Object.entries(skills||{}).map(([k,w])=>((hg.competitionSkills&&hg.competitionSkills[k])??hg.ratings[k]??hg.ratings.general)*w);
+    if(vals.length)return vals.reduce((a,b)=>a+b,0);
+    return hg.ratings.general;
   }
-
-  /**
-   * Runs a competition among `candidates` (array of houseguest objects).
-   * Returns { category, label, winner, ranking } where ranking is sorted
-   * best-to-worst with the raw scores used.
-   */
-  function runCompetition(candidates, opts = {}) {
-    opts = Object.assign({ category: null, noiseMin: 0.55, noiseMax: 1.55 }, opts);
-    if (!candidates.length) return null;
-    const category = opts.category || pickCategory();
-
-    const scored = candidates.map(hg => {
-      const base = hg.ratings[category] * 0.7 + hg.ratings.general * 0.3;
-      const noise = opts.noiseMin + Math.random() * (opts.noiseMax - opts.noiseMin);
-      return { hg, score: base * noise };
-    });
-    scored.sort((a, b) => b.score - a.score);
-
-    return {
-      category,
-      label: competitionLabel(category),
-      winner: scored[0].hg,
-      ranking: scored.map(s => ({ id: s.hg.id, score: Math.round(s.score * 10) / 10 }))
-    };
+  function runCompetition(candidates,opts={}){
+    if(!candidates?.length)return null;
+    const schedule=scheduleFor(opts);
+    const category=opts.category||schedule?.primaryCategory||pickCategory();
+    const label=schedule?.name||opts.label||({physical:"Physical Competition",mental:"Mental Competition",social:"Social Competition",strategic:"Strategic Competition"}[category]||"Big Brother Competition");
+    const weights=schedule?.skills||({[category]:.7,general:.3});
+    const scored=candidates.map(h=>{const base=skillScore(h,weights);const noise=(opts.noiseMin??.82)+Math.random()*((opts.noiseMax??1.18)-(opts.noiseMin??.82));return{hg:h,score:base*noise}}).sort((a,b)=>b.score-a.score);
+    return{category,label,winner:scored[0].hg,ranking:scored.map(x=>({id:x.hg.id,score:Math.round(x.score*10)/10}))};
   }
-
-  window.Competitions = { runCompetition, pickCategory, competitionLabel };
+  window.Competitions={runCompetition,pickCategory,competitionLabel:(c)=>c};
 })();
