@@ -18,7 +18,15 @@
   const R = () => window.RelEngine;
 
   function log(state, entry) {
-    state.history.push(Object.assign({ id: state.history.length + 1 }, entry));
+    const record = Object.assign({ id: state.history.length + 1 }, entry);
+    state.history.push(record);
+    // Save a compact post-event snapshot so the UI can move through the season
+    // without exposing the final outcome before it is revealed.
+    const snapshot = JSON.parse(JSON.stringify(state));
+    snapshot.history = [];
+    snapshot.ui = { revealedEvents: 0 };
+    record.snapshot = snapshot;
+    state.currentEventIndex = record.id - 1;
   }
 
   function living(state) {
@@ -237,6 +245,7 @@
     const nomineeCount = Math.min(2, eligible.length);
     let nominees = R().pickNominees(state, hoh, eligible, nomineeCount);
     nominees.forEach(n => (n.nominated = true));
+    state.nominees = nominees.map(n => n.id);
 
     log(state, {
       week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "nominations",
@@ -265,6 +274,7 @@
       if (replacement) {
         replacement.nominated = true;
         nominees.push(replacement);
+        state.nominees = nominees.map(n => n.id);
         log(state, {
           week, phase: "standard", type: "nominations",
           title: "Replacement Nominee",
@@ -277,9 +287,17 @@
     const povPool = [hoh, ...nominees];
     const others = shuffledCopy(living(state).filter(h => !povPool.includes(h)));
     povPool.push(...others.slice(0, Math.max(0, 6 - povPool.length)));
+    state.povPlayers = povPool.map(h => h.id);
+
+    log(state, {
+      week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard",
+      type: "pov-players", title: "Power of Veto Players",
+      lines: [povPool.map(displayName).join(", ")]
+    });
 
     const povComp = C().runCompetition(povPool);
     const vetoWinner = povComp.winner;
+    state.vetoWinners = [vetoWinner.id];
     log(state, {
       week, phase: "standard", type: "veto",
       title: `Power of Veto — ${povComp.label}`,
@@ -305,6 +323,7 @@
       const savedHg = nominees.find(n => n.id === saved.savedId);
       savedHg.nominated = false;
       nominees = nominees.filter(n => n.id !== saved.savedId);
+      state.nominees = nominees.map(n => n.id);
       log(state, {
         week, phase: "standard", type: "veto-ceremony",
         title: "Veto Ceremony — Used",
@@ -315,6 +334,7 @@
       if (replacement) {
         replacement.nominated = true;
         nominees.push(replacement);
+        state.nominees = nominees.map(n => n.id);
         log(state, {
           week, phase: "standard", type: "nominations",
           title: "Replacement Nominee",
@@ -339,14 +359,18 @@
         nominees.push(h);
       });
     }
+    state.nominees = nominees.map(h => h.id);
     const finalNoms = nominees.slice(0, 2);
+    state.nominees = finalNoms.map(h => h.id);
     const voters = living(state).filter(h => h.id !== hoh.id && !finalNoms.includes(h));
     const votesToEvict = { [finalNoms[0].id]: 0, [finalNoms[1].id]: 0 };
     const voteLog = [];
+    state.evictionVotes = [];
 
     voters.forEach(voter => {
       const votedOutId = R().decideVote(state, voter, finalNoms[0], finalNoms[1], hoh);
       votesToEvict[votedOutId]++;
+      state.evictionVotes.push({ voterId: voter.id, vote: votedOutId });
       voteLog.push(`${displayName(voter)} votes to evict ${displayName(state.houseguests.find(h => h.id === votedOutId))}.`);
     });
 
@@ -388,6 +412,12 @@
         evicted.juryMember ? `${displayName(evicted)} will join the jury.` : `${displayName(evicted)}'s journey ends here — finishing in ${ordinal(evicted.placement)} place.`
       ]
     });
+
+    evicted.nominated = false;
+    stays.nominated = false;
+    state.nominees = [];
+    state.povPlayers = [];
+    state.vetoWinners = [];
 
     if (Math.random() < 0.55) {
       const alliance = R().formAlliances(state, week);
@@ -567,6 +597,8 @@
     state.jury = [];
     state.evicted = [];
     state.finale = null;
+    state.currentEventIndex = -1;
+    state.ui = { revealedEvents: 0 };
     state.phase = "premiere";
 
     runPremiere(state, config);
