@@ -13,6 +13,22 @@
   const validity = document.getElementById("validity");
   const toast = document.getElementById("toast");
 
+  const setupView = document.getElementById("setupView");
+  const seasonView = document.getElementById("seasonView");
+  const startSeasonBtn = document.getElementById("startSeasonBtn");
+  const revealNextBtn = document.getElementById("revealNextBtn");
+  const revealAllBtn = document.getElementById("revealAllBtn");
+  const backToSetupBtn = document.getElementById("backToSetupBtn");
+  const feed = document.getElementById("feed");
+  const castStatusList = document.getElementById("castStatusList");
+  const seasonHeading = document.getElementById("seasonHeading");
+  const seasonStatusLine = document.getElementById("seasonStatusLine");
+  const pageSubtitle = document.getElementById("pageSubtitle");
+  const pageBadge = document.getElementById("pageBadge");
+
+  let revealGroups = [];
+  let revealPointer = 0;
+
   const demoNames = [
     ["Tucker", "Player"], ["Grace", "Player"], ["Antonio", "Player"], ["Riley", "Player"],
     ["Aly", "Player"], ["Stephanie", "Player"], ["Jordan", "Player"], ["Morgan", "Player"],
@@ -240,5 +256,184 @@
     } catch (_) {}
   }
 
-  refresh();
+  const resumeSeason = Boolean(state.phase && state.phase !== "setup" && state.history && state.history.length);
+
+  // -----------------------------------------------------------------
+  // SEASON SIMULATION
+  // -----------------------------------------------------------------
+
+  function groupHistory(history) {
+    const groups = [];
+    history.forEach(entry => {
+      const last = groups[groups.length - 1];
+      if (last && last.week === entry.week) {
+        last.entries.push(entry);
+      } else {
+        groups.push({ week: entry.week, entries: [entry] });
+      }
+    });
+    return groups;
+  }
+
+  function weekLabel(week) {
+    if (week === 0) return "Move-In Day";
+    if (week === "Final") return "Finale";
+    return `Week ${week}`;
+  }
+
+  function phaseTag(phase) {
+    const map = {
+      premiere: "PREMIERE", team: "TEAM PHASE", "high-roller": "HIGH ROLLER'S ROOM",
+      standard: "STANDARD WEEK", finale: "FINALE"
+    };
+    return map[phase] || phase.toUpperCase();
+  }
+
+  function renderCastStatus() {
+    const rows = state.houseguests.slice().sort((a, b) => {
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      const pa = a.placement ?? 0, pb = b.placement ?? 0;
+      return pa - pb;
+    });
+    castStatusList.innerHTML = rows.map(hg => {
+      let badge = `<span class="status-pill active">In House</span>`;
+      if (!hg.active) {
+        if (hg.placement === 1) badge = `<span class="status-pill winner">WINNER</span>`;
+        else if (hg.placement === 2) badge = `<span class="status-pill runner-up">Runner-Up</span>`;
+        else if (hg.juryMember) badge = `<span class="status-pill jury">Jury · ${ordinalSafe(hg.placement)}</span>`;
+        else badge = `<span class="status-pill evicted">${ordinalSafe(hg.placement)} place</span>`;
+      } else if (hg.safe) {
+        badge = `<span class="status-pill safe">Safe</span>`;
+      } else if (hg.nominated) {
+        badge = `<span class="status-pill nominated">Nominated</span>`;
+      } else if (hg.id === state.currentHOH) {
+        badge = `<span class="status-pill hoh">HOH</span>`;
+      }
+      const teamName = state.teams.find(t => t.id === hg.teamId);
+      return `
+        <div class="status-row ${hg.active ? "" : "is-out"}">
+          ${hg.portraitUrl ? `<img class="mini-portrait" src="${escapeHtml(hg.portraitUrl)}" alt="">` : `<div class="mini-portrait"></div>`}
+          <div class="status-row-body">
+            <div class="status-row-name">${escapeHtml(playerName(hg))}</div>
+            ${teamName ? `<div class="status-row-sub">${escapeHtml(teamName.name)}</div>` : ""}
+          </div>
+          ${badge}
+        </div>`;
+    }).join("");
+  }
+
+  function ordinalSafe(n) {
+    if (n == null) return "";
+    return window.SeasonEngine.ordinal(n);
+  }
+
+  function renderEntry(entry) {
+    return `
+      <article class="feed-entry feed-${entry.type}">
+        <div class="feed-entry-tag">${phaseTag(entry.phase)}</div>
+        <h3>${escapeHtml(entry.title)}</h3>
+        <ul>${entry.lines.map(l => `<li>${escapeHtml(l)}</li>`).join("")}</ul>
+      </article>`;
+  }
+
+  function revealGroup(group) {
+    const header = document.createElement("div");
+    header.className = "feed-week-header";
+    header.textContent = weekLabel(group.week);
+    feed.appendChild(header);
+    group.entries.forEach(entry => {
+      const wrap = document.createElement("div");
+      wrap.innerHTML = renderEntry(entry);
+      feed.appendChild(wrap.firstElementChild);
+    });
+    feed.scrollTop = feed.scrollHeight;
+  }
+
+  function updateSeasonControls() {
+    const done = revealPointer >= revealGroups.length;
+    revealNextBtn.disabled = done;
+    revealAllBtn.disabled = done;
+    seasonStatusLine.textContent = done
+      ? "The season is complete — thanks for watching!"
+      : `${revealPointer} of ${revealGroups.length} moments revealed.`;
+  }
+
+  function revealNext() {
+    if (revealPointer >= revealGroups.length) return;
+    const group = revealGroups[revealPointer];
+    revealGroup(group);
+    revealPointer++;
+    renderCastStatus();
+    updateSeasonControls();
+  }
+
+  function revealAll() {
+    while (revealPointer < revealGroups.length) revealNext();
+  }
+
+  startSeasonBtn.addEventListener("click", () => {
+    const missing = state.houseguests.filter(hg => !hg.firstName.trim() || !hg.lastName.trim());
+    if (missing.length) {
+      showToast("Every houseguest needs a name before the season can start.");
+      return;
+    }
+    SeasonEngine.simulateSeason(state, BB23_CONFIG);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    revealGroups = groupHistory(state.history);
+    revealPointer = 0;
+    feed.innerHTML = "";
+
+    setupView.classList.add("hidden");
+    seasonView.classList.remove("hidden");
+    pageSubtitle.textContent = "Season in Progress";
+    pageBadge.textContent = "LIVE SIMULATION";
+    seasonHeading.textContent = state.season.name || "Big Brother 23 — Custom Cast";
+
+    renderCastStatus();
+    updateSeasonControls();
+    revealNext();
+  });
+
+  revealNextBtn.addEventListener("click", revealNext);
+  revealAllBtn.addEventListener("click", revealAll);
+
+  backToSetupBtn.addEventListener("click", () => {
+    if (!confirm("Start a brand new season? Your current cast stays, but all game results will be cleared.")) return;
+    const preservedCast = state.houseguests;
+    const preservedTeams = state.teams;
+    const preservedSeasonName = state.season.name;
+    state = GameState.createInitialState(BB23_CONFIG);
+    state.houseguests = preservedCast.map(hg => Object.assign(
+      GameState.createInitialState(BB23_CONFIG).houseguests[0],
+      { id: hg.id, slot: hg.slot, firstName: hg.firstName, lastName: hg.lastName, portraitUrl: hg.portraitUrl, ratings: Object.assign({}, hg.ratings), teamId: null }
+    ));
+    preservedTeams.forEach(t => (t.memberIds = []));
+    state.teams = preservedTeams;
+    state.season.name = preservedSeasonName;
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    seasonView.classList.add("hidden");
+    setupView.classList.remove("hidden");
+    pageSubtitle.textContent = "Custom Cast Setup";
+    pageBadge.textContent = "BB23 TEMPLATE";
+    document.getElementById("seasonName").value = state.season.name;
+    refresh();
+    showToast("New season ready — review your cast and start again.");
+  });
+
+  if (resumeSeason) {
+    revealGroups = groupHistory(state.history);
+    revealPointer = 0;
+    feed.innerHTML = "";
+    setupView.classList.add("hidden");
+    seasonView.classList.remove("hidden");
+    pageSubtitle.textContent = state.phase === "complete" ? "Season Complete" : "Season in Progress";
+    pageBadge.textContent = state.phase === "complete" ? "SEASON COMPLETE" : "LIVE SIMULATION";
+    seasonHeading.textContent = state.season.name || "Big Brother 23 — Custom Cast";
+    renderCastStatus();
+    revealAll();
+  } else {
+    refresh();
+  }
 })();
