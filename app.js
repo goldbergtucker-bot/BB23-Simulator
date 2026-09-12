@@ -1,131 +1,114 @@
 /*
- * BIG BROTHER 23 CUSTOM SIMULATOR — STAGE 1 UI
+ * BIG BROTHER 23 CUSTOM SIMULATOR
+ * BrantSteele-style event viewer.
+ * The engine simulates once; the UI reveals immutable event snapshots one at a time.
  */
-
 (() => {
-  const STORAGE_KEY = "bb23CustomSimulatorStage1";
-
+  const STORAGE_KEY = "bb23CustomSimulatorStage2";
+  const REVEAL_KEY = "bb23CustomSimulatorRevealIndex";
   let state = GameState.createInitialState(BB23_CONFIG);
+  let history = [];
+  let pointer = 0;
 
-  const castGrid = document.getElementById("castGrid");
-  const teamsGrid = document.getElementById("teamsGrid");
-  const statePreview = document.getElementById("statePreview");
-  const validity = document.getElementById("validity");
-  const toast = document.getElementById("toast");
+  const $ = id => document.getElementById(id);
+  const castGrid = $("castGrid"), teamsGrid = $("teamsGrid"), statePreview = $("statePreview"), validity = $("validity"), toast = $("toast");
+  const setupView = $("setupView"), seasonView = $("seasonView"), feed = $("feed"), castStatusList = $("castStatusList");
+  const seasonHeading = $("seasonHeading"), seasonStatusLine = $("seasonStatusLine"), pageSubtitle = $("pageSubtitle"), pageBadge = $("pageBadge");
+  const demoNames = [["Tucker","Player"],["Grace","Player"],["Antonio","Player"],["Riley","Player"],["Aly","Player"],["Stephanie","Player"],["Jordan","Player"],["Morgan","Player"],["Cameron","Player"],["Taylor","Player"],["Alex","Player"],["Casey","Player"],["Drew","Player"],["Jamie","Player"],["Logan","Player"],["Parker","Player"]];
 
-  const setupView = document.getElementById("setupView");
-  const seasonView = document.getElementById("seasonView");
-  const startSeasonBtn = document.getElementById("startSeasonBtn");
-  const revealNextBtn = document.getElementById("revealNextBtn");
-  const revealPrevBtn = document.getElementById("revealPrevBtn");
-  const revealAllBtn = document.getElementById("revealAllBtn");
-  const backToSetupBtn = document.getElementById("backToSetupBtn");
-  const feed = document.getElementById("feed");
-  const castStatusList = document.getElementById("castStatusList");
-  const seasonHeading = document.getElementById("seasonHeading");
-  const seasonStatusLine = document.getElementById("seasonStatusLine");
-  const pageSubtitle = document.getElementById("pageSubtitle");
-  const pageBadge = document.getElementById("pageBadge");
+  function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));}
+  function name(h){return `${h.firstName} ${h.lastName}`.trim()||`Houseguest ${h.slot}`;}
+  function ordinal(n){return SeasonEngine.ordinal(n);}
+  function toastMsg(m){toast.textContent=m;toast.classList.add("show");clearTimeout(toastMsg.t);toastMsg.t=setTimeout(()=>toast.classList.remove("show"),2200);}
 
-  let revealEvents = [];
-  let revealPointer = 0;
-  let displayState = state;
+  function renderCast(){
+    castGrid.innerHTML=state.houseguests.map(h=>`<article class="cast-card">
+      <div class="portrait-wrap">${h.portraitUrl?`<img src="${esc(h.portraitUrl)}" alt="${esc(name(h))}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';"><div class="placeholder" style="display:none">PORTRAIT ERROR</div>`:`<div class="placeholder">PORTRAIT URL</div>`}</div>
+      <div class="cast-body"><div class="cast-number">HOUSEGUEST ${String(h.slot).padStart(2,"0")}</div><div class="cast-name">${esc(name(h))}</div>
+      <div class="cast-fields"><label>First Name<input type="text" data-id="${h.id}" data-field="firstName" value="${esc(h.firstName)}"></label>
+      <label>Last Name<input type="text" data-id="${h.id}" data-field="lastName" value="${esc(h.lastName)}"></label>
+      <label>Portrait URL<input type="url" data-id="${h.id}" data-field="portraitUrl" value="${esc(h.portraitUrl)}" placeholder="https://..."></label>
+      <div class="row">${BB23_CONFIG.ratingKeys.slice(0,2).map(k=>ratingControl(h,k)).join("")}</div>
+      <div class="row">${BB23_CONFIG.ratingKeys.slice(2,4).map(k=>ratingControl(h,k)).join("")}</div>${ratingControl(h,"strategic")}</div></div></article>`).join("");
+  }
+  function ratingControl(h,k){return `<label><span class="rating-label"><span>${k}</span><strong>${h.ratings[k]}</strong></span><input type="range" min="1" max="100" value="${h.ratings[k]}" data-id="${h.id}" data-rating="${k}"></label>`;}
+  function renderTeams(){teamsGrid.innerHTML=state.teams.map(t=>{const ms=t.memberIds.map(id=>state.houseguests.find(h=>h.id===id)).filter(Boolean);return `<div class="team"><h3>${esc(t.name)}</h3><div class="team-sub">${ms.length}/4 assigned</div><div class="team-list">${ms.length?ms.map(h=>`<div class="team-player">${h.portraitUrl?`<img class="mini-portrait" src="${esc(h.portraitUrl)}" alt="">`:`<div class="mini-portrait"></div>`}${esc(name(h))}</div>`).join(""):"<div class=\"team-player\">Team draft occurs in the premiere.</div>"}</div></div>`}).join("");}
+  function validate(){const missing=state.houseguests.filter(h=>!h.firstName.trim()||!h.lastName.trim());validity.textContent=missing.length?`${missing.length} player${missing.length===1?"":"s"} need a name`:"Cast ready";validity.classList.toggle("invalid",!!missing.length);}
+  function refreshSetup(){renderCast();renderTeams();validate();statePreview.textContent=JSON.stringify(state,null,2);}
+  function assignDemoTeams(){state.teams.forEach(t=>t.memberIds=[]);state.houseguests.forEach((h,i)=>{const t=state.teams[Math.floor(i/4)];h.teamId=t.id;t.memberIds.push(h.id);});}
+  function loadDemo(){state=GameState.createInitialState(BB23_CONFIG);state.season.name="Big Brother 23 — Custom Demo";state.houseguests.forEach((h,i)=>{[h.firstName,h.lastName]=demoNames[i];h.ratings.general=45+(i*7)%45;h.ratings.physical=40+(i*11)%55;h.ratings.mental=42+(i*13)%53;h.ratings.social=45+(i*9)%50;h.ratings.strategic=40+(i*17)%58;});assignDemoTeams();refreshSetup();toastMsg("Demo cast loaded.");}
 
-  const demoNames = [
-    ["Tucker", "Player"], ["Grace", "Player"], ["Antonio", "Player"], ["Riley", "Player"],
-    ["Aly", "Player"], ["Stephanie", "Player"], ["Jordan", "Player"], ["Morgan", "Player"],
-    ["Cameron", "Player"], ["Taylor", "Player"], ["Alex", "Player"], ["Casey", "Player"],
-    ["Drew", "Player"], ["Jamie", "Player"], ["Logan", "Player"], ["Parker", "Player"]
-  ];
+  castGrid.addEventListener("input",e=>{const el=e.target,h=state.houseguests.find(x=>x.id===el.dataset.id);if(!h)return;if(el.dataset.field){h[el.dataset.field]=el.value;if(el.dataset.field==="portraitUrl")renderCast();}if(el.dataset.rating){h.ratings[el.dataset.rating]=Number(el.value);const s=el.parentElement.querySelector("strong");if(s)s.textContent=el.value;}validate();statePreview.textContent=JSON.stringify(state,null,2);});
+  ["seasonName","themeUrl","logoUrl"].forEach(id=>$(id).addEventListener("input",e=>{state.season[{seasonName:"name",themeUrl:"themeUrl",logoUrl:"logoUrl"}[id]]=e.target.value;statePreview.textContent=JSON.stringify(state,null,2);}));
+  $("loadDemoBtn").onclick=loadDemo;
+  $("resetBtn").onclick=()=>{if(confirm("Reset the entire cast?")){state=GameState.createInitialState(BB23_CONFIG);refreshSetup();toastMsg("Cast reset.");}};
+  $("saveBtn").onclick=()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));toastMsg("Season saved.");};
+  $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb23-custom-season.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
+  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");state=x;$("seasonName").value=state.season?.name||"";$("themeUrl").value=state.season?.themeUrl||"";$("logoUrl").value=state.season?.logoUrl||"";refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
 
-  function showToast(message) {
-    toast.textContent = message;
-    toast.classList.add("show");
-    clearTimeout(showToast.timer);
-    showToast.timer = setTimeout(() => toast.classList.remove("show"), 2200);
+  function snapshotAt(i){return history[i]?.snapshot||null;}
+  function getViewState(){return pointer>0?snapshotAt(pointer-1):null;}
+  function statusBadge(h,view){
+    if(!h.active){if(h.placement===1)return `<span class="status-pill winner">WINNER</span>`;if(h.placement===2)return `<span class="status-pill runner-up">RUNNER-UP</span>`;if(h.juryMember)return `<span class="status-pill jury">JURY · ${ordinal(h.placement)}</span>`;return `<span class="status-pill evicted">${ordinal(h.placement)} PLACE</span>`;}
+    if(view?.currentHOH===h.id)return `<span class="status-pill hoh">HOH</span>`;
+    if(view?.nominees?.includes(h.id))return `<span class="status-pill nominated">NOMINATED</span>`;
+    if(view?.povPlayers?.includes(h.id))return `<span class="status-pill pov">POV</span>`;
+    if(h.safe)return `<span class="status-pill safe">SAFE</span>`;
+    return `<span class="status-pill active">IN HOUSE</span>`;
+  }
+  function renderCastStatus(view=getViewState()){
+    const source=view?.houseguests||state.houseguests;
+    const rows=source.slice().sort((a,b)=>{if(a.active!==b.active)return a.active?-1:1;return (a.placement??0)-(b.placement??0);});
+    castStatusList.innerHTML=rows.map(h=>`<div class="status-row ${h.active?"":"is-out"}">${h.portraitUrl?`<img class="mini-portrait" src="${esc(h.portraitUrl)}" alt="">`:`<div class="mini-portrait"></div>`}<div class="status-row-body"><div class="status-row-name">${esc(name(h))}</div></div>${statusBadge(h,view)}</div>`).join("");
   }
 
-  function escapeHtml(value) {
-    return String(value ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+  function findMentionedPlayers(entry,view){
+    const all=view.houseguests;const text=`${entry.title} ${(entry.lines||[]).join(" ")}`.toLowerCase();
+    return all.filter(h=>text.includes(name(h).toLowerCase()));
   }
-
-  function playerName(hg) {
-    const name = `${hg.firstName} ${hg.lastName}`.trim();
-    return name || `Houseguest ${hg.slot}`;
+  function idsForEntry(entry,view){
+    const type=entry.type;
+    if(type==="hoh"||type==="final3-part1"||type==="final3-part2"||type==="final3-part3")return findMentionedPlayers(entry,view);
+    if(type==="nominations"||type==="veto-ceremony")return (view.nominees||[]).map(id=>view.houseguests.find(h=>h.id===id)).filter(Boolean);
+    if(type==="veto")return (view.povPlayers||[]).map(id=>view.houseguests.find(h=>h.id===id)).filter(Boolean);
+    if(type==="eviction"||type==="final-decision"||type==="winner")return findMentionedPlayers(entry,view);
+    if(type==="eviction-voting"||type==="jury-vote")return findMentionedPlayers(entry,view);
+    return findMentionedPlayers(entry,view);
   }
-
-  function renderCast() {
-    castGrid.innerHTML = state.houseguests.map(hg => `
-      <article class="cast-card">
-        <div class="portrait-wrap">
-          ${hg.portraitUrl
-            ? `<img src="${escapeHtml(hg.portraitUrl)}" alt="${escapeHtml(playerName(hg))}" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';"><div class="placeholder" style="display:none">PORTRAIT ERROR</div>`
-            : `<div class="placeholder">PORTRAIT URL</div>`}
-        </div>
-        <div class="cast-body">
-          <div class="cast-number">HOUSEGUEST ${String(hg.slot).padStart(2,"0")}</div>
-          <div class="cast-name">${escapeHtml(playerName(hg))}</div>
-          <div class="cast-fields">
-            <label>First Name<input type="text" data-id="${hg.id}" data-field="firstName" value="${escapeHtml(hg.firstName)}" placeholder="First name"></label>
-            <label>Last Name<input type="text" data-id="${hg.id}" data-field="lastName" value="${escapeHtml(hg.lastName)}" placeholder="Last name"></label>
-            <label>Portrait URL<input type="url" data-id="${hg.id}" data-field="portraitUrl" value="${escapeHtml(hg.portraitUrl)}" placeholder="https://..."></label>
-            <div class="row">${BB23_CONFIG.ratingKeys.slice(0,2).map(key=>ratingControl(hg,key)).join("")}</div>
-            <div class="row">${BB23_CONFIG.ratingKeys.slice(2,4).map(key=>ratingControl(hg,key)).join("")}</div>
-            ${ratingControl(hg,"strategic")}
-          </div>
-        </div>
-      </article>`).join("");
+  function portraits(players){return players.length?`<div class="event-portraits">${players.slice(0,8).map(h=>`<div class="event-player">${h.portraitUrl?`<img src="${esc(h.portraitUrl)}" alt="${esc(name(h))}">`:`<div class="event-portrait-placeholder"></div>`}<strong>${esc(name(h))}</strong></div>`).join("")}</div>`:"";}
+  function eventMarkup(entry,view){
+    const players=idsForEntry(entry,view);
+    const lines=(entry.lines||[]).map(l=>`<li>${esc(l)}</li>`).join("");
+    return `<article class="feed-entry feed-${esc(entry.type)}"><div class="feed-entry-tag">${esc((entry.phase||"event").replaceAll("-"," ").toUpperCase())}</div><h3>${esc(entry.title)}</h3>${portraits(players)}<ul>${lines}</ul></article>`;
   }
-  function ratingControl(hg,key){return `<label><span class="rating-label"><span>${key}</span><strong>${hg.ratings[key]}</strong></span><input type="range" min="1" max="100" value="${hg.ratings[key]}" data-id="${hg.id}" data-rating="${key}"></label>`}
-  function renderTeams(){teamsGrid.innerHTML=state.teams.map(team=>{const members=team.memberIds.map(id=>state.houseguests.find(h=>h.id===id)).filter(Boolean);return `<div class="team"><h3>${escapeHtml(team.name)}</h3><div class="team-sub">${members.length}/4 assigned</div><div class="team-list">${members.length?members.map(h=>`<div class="team-player">${h.portraitUrl?`<img class="mini-portrait" src="${escapeHtml(h.portraitUrl)}">`:`<div class="mini-portrait"></div>`}${escapeHtml(playerName(h))}</div>`).join(""):"<div class=\"team-player\">Team draft occurs in the premiere.</div>"}</div></div>`}).join("")}
-  function validate(){const missing=state.houseguests.filter(h=>!h.firstName.trim()||!h.lastName.trim());validity.textContent=missing.length?`${missing.length} player${missing.length===1?"":"s"} need a name`:"Cast ready";validity.classList.toggle("invalid",Boolean(missing.length))}
-  function refresh(){renderCast();renderTeams();validate();statePreview.textContent=JSON.stringify(state,null,2)}
-  function assignDemoTeams(){state.teams.forEach(t=>t.memberIds=[]);state.houseguests.forEach((hg,i)=>{const t=state.teams[Math.floor(i/4)];hg.teamId=t.id;t.memberIds.push(hg.id)})}
-  function loadDemo(){state=GameState.createInitialState(BB23_CONFIG);state.season.name="Big Brother 23 — Custom Demo";state.houseguests.forEach((hg,i)=>{hg.firstName=demoNames[i][0];hg.lastName=demoNames[i][1];hg.ratings.general=45+(i*7%45);hg.ratings.physical=40+(i*11%55);hg.ratings.mental=42+(i*13%53);hg.ratings.social=45+(i*9%50);hg.ratings.strategic=40+(i*17%58)});assignDemoTeams();refresh();showToast("Demo cast loaded.")}
-
-  castGrid.addEventListener("input",event=>{const el=event.target,hg=state.houseguests.find(h=>h.id===el.dataset.id);if(!hg)return;if(el.dataset.field){hg[el.dataset.field]=el.value;if(el.dataset.field==="portraitUrl")renderCast()}if(el.dataset.rating){hg.ratings[el.dataset.rating]=Number(el.value);const strong=el.parentElement.querySelector("strong");if(strong)strong.textContent=el.value}validate();statePreview.textContent=JSON.stringify(state,null,2)});
-  document.getElementById("seasonName").addEventListener("input",e=>{state.season.name=e.target.value;statePreview.textContent=JSON.stringify(state,null,2)});
-  document.getElementById("themeUrl").addEventListener("input",e=>{state.season.themeUrl=e.target.value;statePreview.textContent=JSON.stringify(state,null,2)});
-  document.getElementById("logoUrl").addEventListener("input",e=>{state.season.logoUrl=e.target.value;statePreview.textContent=JSON.stringify(state,null,2)});
-  document.getElementById("loadDemoBtn").addEventListener("click",loadDemo);
-  document.getElementById("resetBtn").addEventListener("click",()=>{if(!confirm("Reset the entire Stage 1 cast?"))return;state=GameState.createInitialState(BB23_CONFIG);document.getElementById("seasonName").value=state.season.name;document.getElementById("themeUrl").value="";document.getElementById("logoUrl").value="";refresh();showToast("Cast reset.")});
-  document.getElementById("saveBtn").addEventListener("click",()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));showToast("Season saved in this browser.")});
-  document.getElementById("exportBtn").addEventListener("click",()=>{const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="bb23-custom-season-stage1.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);showToast("Season JSON exported.")});
-  document.getElementById("importInput").addEventListener("change",async e=>{const file=e.target.files[0];if(!file)return;try{const imported=JSON.parse(await file.text());if(!imported.houseguests||imported.houseguests.length!==16)throw new Error("The file does not contain a valid 16-player BB23 cast.");state=imported;document.getElementById("seasonName").value=state.season?.name||"";document.getElementById("themeUrl").value=state.season?.themeUrl||"";document.getElementById("logoUrl").value=state.season?.logoUrl||"";refresh();showToast("Season imported.")}catch(err){alert(`Import failed: ${err.message}`)}e.target.value=""});
-
-  function phaseTag(phase){return ({premiere:"PREMIERE",team:"TEAM PHASE","high-roller":"HIGH ROLLER'S ROOM",standard:"STANDARD WEEK",finale:"FINALE"}[phase]||String(phase||"").toUpperCase())}
-  function eventLabel(type){return ({teams:"TEAMS",hoh:"HOH",twist:"TWIST",wildcard:"WILDCARD",team:"TEAM SAFETY","team-safety":"TEAM SAFETY","pov-players":"POV PLAYERS",pov:"POV","veto":"POV", "veto-ceremony":"VETO CEREMONY", nominations:"NOMINATIONS",power:"POWER", "bb-bucks":"BB BUCKS","high-roller-room":"HIGH ROLLER'S ROOM","eviction-voting":"EVICTION VOTE",eviction:"EVICTION",alliance:"ALLIANCE","final3-part1":"FINAL HOH PART 1","final3-part2":"FINAL HOH PART 2","final3-part3":"FINAL HOH PART 3","final-decision":"FINAL HOH DECISION","jury-vote":"JURY VOTE",winner:"WINNER"}[type]||String(type||"").replaceAll("-"," ").toUpperCase())}
-  function findHg(id, source=displayState){return source?.houseguests?.find(h=>h.id===id)||state.houseguests.find(h=>h.id===id)}
-  function portrait(id,source=displayState,small=false){const h=findHg(id,source);return h?.portraitUrl?`<img class="event-portrait ${small?"small":""}" src="${escapeHtml(h.portraitUrl)}" alt="${escapeHtml(playerName(h))}">`:`<div class="event-portrait ${small?"small":""}">${escapeHtml((h?.firstName||"?").charAt(0))}</div>`}
-  function names(ids,source=displayState){return (ids||[]).map(id=>findHg(id,source)).filter(Boolean).map(playerName)}
-
-  function eventIds(entry,snap){
-    const s=snap||displayState;
-    if(entry.type==="hoh") return s.currentHOH?[s.currentHOH]:[];
-    if(entry.type==="nominations"||entry.type==="veto-ceremony") return (s.nominees||[]).slice();
-    if(entry.type==="pov-players") return (s.povPlayers||[]).slice();
-    if(entry.type==="veto") return (s.vetoWinners||[]).slice();
-    if(entry.type==="eviction") return (s.evicted||[]).slice(-1);
-    if(entry.type==="eviction-voting") return (s.evictionVotes||[]).map(v=>v.voterId).concat((s.nominees||[]));
-    if(entry.type==="winner"||entry.type==="final-decision") return [s.finale?.winnerId,s.finale?.thirdPlaceId].filter(Boolean);
-    return [];
+  function weekLabel(w){return w==="Final"?"FINALE":w===0?"MOVE-IN":`WEEK ${w}`;}
+  function renderFeed(){
+    feed.innerHTML="";let lastWeek=Symbol();
+    history.slice(0,pointer).forEach((entry,i)=>{if(entry.week!==lastWeek){const hdr=document.createElement("div");hdr.className="feed-week-header";hdr.textContent=weekLabel(entry.week);feed.appendChild(hdr);lastWeek=entry.week;}const wrap=document.createElement("div");wrap.innerHTML=eventMarkup(entry,entry.snapshot);feed.appendChild(wrap.firstElementChild);});
+    feed.scrollTop=feed.scrollHeight;
   }
-  function renderEvent(entry){const snap=entry.snapshot||state;const ids=eventIds(entry,snap);const people=ids.slice(0,8);return `<article class="event-card event-${escapeHtml(entry.type)}"><div class="event-top"><span class="event-tag">${phaseTag(entry.phase)}</span><span class="event-label">${eventLabel(entry.type)}</span></div><h3>${escapeHtml(entry.title)}</h3>${people.length?`<div class="event-portraits">${people.map(id=>`<div class="event-person">${portrait(id,snap)}<span>${escapeHtml(playerName(findHg(id,snap)))}</span></div>`).join("")}</div>`:""}<ul>${entry.lines.map(l=>`<li>${escapeHtml(l)}</li>`).join("")}</ul></article>`}
+  function updateSeasonUI(){
+    const done=pointer>=history.length;$("previousBtn").disabled=pointer<=1;$("revealNextBtn").disabled=done;$("revealAllBtn").disabled=done;$("revealWeekBtn").disabled=done;
+    seasonStatusLine.textContent=done?"Season complete — every event has been revealed.":`Event ${pointer} of ${history.length}`;
+    renderCastStatus(getViewState());renderFeed();
+  }
+  function revealNext(){if(pointer>=history.length)return;pointer++;localStorage.setItem(REVEAL_KEY,String(pointer));updateSeasonUI();}
+  function revealPrevious(){if(pointer<=1)return;pointer--;localStorage.setItem(REVEAL_KEY,String(pointer));updateSeasonUI();}
+  function revealWeek(){if(pointer>=history.length)return;const w=history[pointer].week;while(pointer<history.length&&history[pointer].week===w)pointer++;localStorage.setItem(REVEAL_KEY,String(pointer));updateSeasonUI();}
+  function revealAll(){pointer=history.length;localStorage.setItem(REVEAL_KEY,String(pointer));updateSeasonUI();}
 
-  function renderCastStatus(source=displayState){const rows=source.houseguests.slice().sort((a,b)=>{if(a.active!==b.active)return a.active?-1:1;return (a.placement??999)-(b.placement??999)});castStatusList.innerHTML=rows.map(hg=>{let badge=`<span class="status-pill active">In House</span>`;if(!hg.active){if(hg.placement===1)badge=`<span class="status-pill winner">WINNER</span>`;else if(hg.placement===2)badge=`<span class="status-pill runner-up">Runner-Up</span>`;else if(hg.juryMember)badge=`<span class="status-pill jury">Jury · ${ordinalSafe(hg.placement)}</span>`;else badge=`<span class="status-pill evicted">${ordinalSafe(hg.placement)} place</span>`}else if(hg.id===source.currentHOH)badge=`<span class="status-pill hoh">HOH</span>`;else if(hg.nominated)badge=`<span class="status-pill nominated">Nominated</span>`;else if(hg.safe)badge=`<span class="status-pill safe">Safe</span>`;return `<div class="status-row ${hg.active?"":"is-out"}">${portrait(hg.id,source,true)}<div class="status-row-body"><div class="status-row-name">${escapeHtml(playerName(hg))}</div></div>${badge}</div>`}).join("")}
-  function ordinalSafe(n){return n==null?"":SeasonEngine.ordinal(n)}
-  function revealNext(){if(revealPointer>=revealEvents.length)return;const entry=revealEvents[revealPointer];displayState=entry.snapshot||state;const wrap=document.createElement("div");wrap.innerHTML=renderEvent(entry);feed.appendChild(wrap.firstElementChild);revealPointer++;state.ui=state.ui||{};state.ui.revealedEvents=revealPointer;localStorage.setItem(STORAGE_KEY,JSON.stringify(state));renderCastStatus(displayState);updateSeasonControls();feed.scrollTop=feed.scrollHeight}
-  function revealAll(){while(revealPointer<revealEvents.length)revealNext()}
-  function revealPrevious(){if(revealPointer<=0)return;revealPointer--;feed.innerHTML="";displayState=revealPointer>0?(revealEvents[revealPointer-1].snapshot||state):GameState.createInitialState(BB23_CONFIG);for(let i=0;i<revealPointer;i++){const wrap=document.createElement("div");wrap.innerHTML=renderEvent(revealEvents[i]);feed.appendChild(wrap.firstElementChild)}state.ui=state.ui||{};state.ui.revealedEvents=revealPointer;localStorage.setItem(STORAGE_KEY,JSON.stringify(state));renderCastStatus(displayState);updateSeasonControls();feed.scrollTop=feed.scrollHeight}
-  function updateSeasonControls(){const done=revealPointer>=revealEvents.length;revealNextBtn.disabled=done;revealAllBtn.disabled=done;revealPrevBtn.disabled=revealPointer<=0;seasonStatusLine.textContent=done?"The season is complete — all events have been revealed.":revealPointer===0?`Ready — ${revealEvents.length} events are queued.`:`Event ${revealPointer} of ${revealEvents.length} revealed — use Reveal Next to continue.`}
+  function startSeason(){
+    const missing=state.houseguests.filter(h=>!h.firstName.trim()||!h.lastName.trim());if(missing.length){toastMsg("Every houseguest needs a first and last name.");return;}
+    SeasonEngine.simulateSeason(state,BB23_CONFIG);history=state.history.slice();pointer=0;localStorage.setItem(STORAGE_KEY,JSON.stringify(state));localStorage.setItem(REVEAL_KEY,"0");
+    setupView.classList.add("hidden");seasonView.classList.remove("hidden");pageSubtitle.textContent="Season in Progress";pageBadge.textContent="LIVE SIMULATION";seasonHeading.textContent=state.season.name||"Big Brother 23 — Custom Cast";updateSeasonUI();revealNext();
+  }
+  $("startSeasonBtn").onclick=startSeason;
+  // These controls are added by JS so the repository also works with the original HTML.
+  const controls=document.createElement("div");controls.className="season-controls";controls.innerHTML='<button id="previousBtn" class="secondary">Previous</button><button id="revealNextBtn">Reveal Next</button><button id="revealWeekBtn" class="secondary">Reveal Week</button><button id="revealAllBtn" class="secondary">Reveal Rest</button>';seasonView.querySelector(".season-hero .hero-actions").innerHTML="";seasonView.querySelector(".season-hero .hero-actions").appendChild(controls);$("previousBtn").onclick=revealPrevious;$("revealNextBtn").onclick=revealNext;$("revealWeekBtn").onclick=revealWeek;$("revealAllBtn").onclick=revealAll;
+  $("backToSetupBtn").onclick=()=>{if(!confirm("Start a new simulation using this same cast?"))return;const cast=state.houseguests.map(h=>JSON.parse(JSON.stringify(h)));const name0=state.season.name;state=GameState.createInitialState(BB23_CONFIG);state.houseguests=cast.map((h,i)=>{const x=state.houseguests[i];Object.assign(x,{id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,teamId:h.teamId,ratings:h.ratings});return x;});state.season.name=name0;state.teams.forEach(t=>t.memberIds=state.houseguests.filter(h=>h.teamId===t.id).map(h=>h.id));localStorage.setItem(STORAGE_KEY,JSON.stringify(state));localStorage.removeItem(REVEAL_KEY);history=[];pointer=0;seasonView.classList.add("hidden");setupView.classList.remove("hidden");pageSubtitle.textContent="Custom Cast Setup";pageBadge.textContent="BB23 TEMPLATE";refreshSetup();toastMsg("New simulation ready.");};
 
-  startSeasonBtn.addEventListener("click",()=>{const missing=state.houseguests.filter(h=>!h.firstName.trim()||!h.lastName.trim());if(missing.length){showToast("Every houseguest needs a name before the season can start.");return}const preSeasonState=GameState.clone(state);SeasonEngine.simulateSeason(state,BB23_CONFIG);state.ui={revealedEvents:0};localStorage.setItem(STORAGE_KEY,JSON.stringify(state));revealEvents=state.history;revealPointer=0;displayState=preSeasonState;feed.innerHTML="";setupView.classList.add("hidden");seasonView.classList.remove("hidden");pageSubtitle.textContent="Season in Progress";pageBadge.textContent="LIVE SIMULATION";seasonHeading.textContent=state.season.name||"Big Brother 23 — Custom Cast";renderCastStatus(displayState);updateSeasonControls();revealNext()});
-  revealPrevBtn.addEventListener("click",revealPrevious);revealNextBtn.addEventListener("click",revealNext);revealAllBtn.addEventListener("click",revealAll);
-
-  backToSetupBtn.addEventListener("click",()=>{if(!confirm("Start a brand new season? Your current cast stays, but all game results will be cleared."))return;const preservedCast=state.houseguests.map(hg=>({id:hg.id,slot:hg.slot,firstName:hg.firstName,lastName:hg.lastName,portraitUrl:hg.portraitUrl,ratings:Object.assign({},hg.ratings),teamId:hg.teamId}));const preservedSeason=Object.assign({},state.season);state=GameState.createInitialState(BB23_CONFIG);state.houseguests.forEach((h,i)=>Object.assign(h,preservedCast[i]||{}));state.season=Object.assign(state.season,preservedSeason,{evictionCount:0});state.teams.forEach(t=>t.memberIds=[]);state.houseguests.forEach(h=>{const t=state.teams.find(x=>x.id===h.teamId);if(t)t.memberIds.push(h.id)});localStorage.setItem(STORAGE_KEY,JSON.stringify(state));seasonView.classList.add("hidden");setupView.classList.remove("hidden");pageSubtitle.textContent="Custom Cast Setup";pageBadge.textContent="BB23 TEMPLATE";document.getElementById("seasonName").value=state.season.name;refresh();showToast("New season ready — review your cast and start again.")});
-
+  // Resume setup/cast from storage, but never auto-reveal the completed season.
   const saved=localStorage.getItem(STORAGE_KEY);
-  if(saved){try{state=JSON.parse(saved);document.getElementById("seasonName").value=state.season?.name||"";document.getElementById("themeUrl").value=state.season?.themeUrl||"";document.getElementById("logoUrl").value=state.season?.logoUrl||""}catch(_){} }
-  const resumeSeason=Boolean(state.phase&&state.phase!=="setup"&&state.history&&state.history.length);
-  if(resumeSeason){revealEvents=state.history;revealPointer=Math.min(Number(state.ui?.revealedEvents)||0,revealEvents.length);feed.innerHTML="";displayState=revealPointer>0?(revealEvents[revealPointer-1].snapshot||state):GameState.createInitialState(BB23_CONFIG);setupView.classList.add("hidden");seasonView.classList.remove("hidden");pageSubtitle.textContent=state.phase==="complete"&&revealPointer>=revealEvents.length?"Season Complete":"Season in Progress";pageBadge.textContent=revealPointer>=revealEvents.length?"SEASON COMPLETE":"LIVE SIMULATION";seasonHeading.textContent=state.season.name||"Big Brother 23 — Custom Cast";for(let i=0;i<revealPointer;i++){const wrap=document.createElement("div");wrap.innerHTML=renderEvent(revealEvents[i]);feed.appendChild(wrap.firstElementChild)}renderCastStatus(displayState);updateSeasonControls()}else refresh();
+  if(saved)try{state=JSON.parse(saved);$("seasonName").value=state.season?.name||"";$("themeUrl").value=state.season?.themeUrl||"";$("logoUrl").value=state.season?.logoUrl||"";}catch{}
+  if(state.history?.length){history=state.history;let savedPointer=Number(localStorage.getItem(REVEAL_KEY));pointer=Number.isFinite(savedPointer)?Math.max(0,Math.min(savedPointer,history.length)):0;setupView.classList.add("hidden");seasonView.classList.remove("hidden");pageSubtitle.textContent=state.phase==="complete"?"Season Complete":"Season in Progress";pageBadge.textContent=state.phase==="complete"?"SEASON COMPLETE":"LIVE SIMULATION";seasonHeading.textContent=state.season.name||"Big Brother 23 — Custom Cast";updateSeasonUI();}else refreshSetup();
 })();
