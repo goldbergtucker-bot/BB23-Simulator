@@ -17,16 +17,34 @@
   const C = () => window.Competitions;
   const R = () => window.RelEngine;
 
+  function viewSnapshot(state) {
+    return {
+      phase: state.phase, week: state.week,
+      currentHOH: state.currentHOH,
+      originalHOH: state.originalHOH || null,
+      secretHOH: state.secretHOH || null,
+      dethronedHOH: state.dethronedHOH || null,
+      nominees: Array.isArray(state.nominees) ? state.nominees.slice() : [],
+      povPlayers: Array.isArray(state.povPlayers) ? state.povPlayers.slice() : [],
+      vetoWinners: Array.isArray(state.vetoWinners) ? state.vetoWinners.slice() : [],
+      evictionVotes: Array.isArray(state.evictionVotes) ? state.evictionVotes.slice() : [],
+      evicted: Array.isArray(state.evicted) ? state.evicted.slice() : [],
+      jury: Array.isArray(state.jury) ? state.jury.slice() : [],
+      houseguests: state.houseguests.map(h => ({
+        id:h.id, slot:h.slot, firstName:h.firstName, lastName:h.lastName,
+        portraitUrl:h.portraitUrl, teamId:h.teamId, active:h.active, safe:h.safe,
+        nominated:h.nominated, juryMember:h.juryMember, evicted:h.evicted, placement:h.placement
+      })),
+      finale: state.finale ? JSON.parse(JSON.stringify(state.finale)) : null
+    };
+  }
+
   function log(state, entry) {
     const record = Object.assign({ id: state.history.length + 1 }, entry);
+    // Every event owns a frozen-in-time view snapshot. The UI never has to
+    // rerun the simulation or read the final state to render an earlier event.
+    record.snapshot = viewSnapshot(state);
     state.history.push(record);
-    // Save a compact post-event snapshot so the UI can move through the season
-    // without exposing the final outcome before it is revealed.
-    const snapshot = JSON.parse(JSON.stringify(state));
-    snapshot.history = [];
-    snapshot.ui = { revealedEvents: 0 };
-    record.snapshot = snapshot;
-    state.currentEventIndex = record.id - 1;
   }
 
   function living(state) {
@@ -92,6 +110,7 @@
   // ---------------------------------------------------------------------
 
   function runPremiere(state, config) {
+    state.week = 0;
     state.season.castSize = state.houseguests.length;
     state.season.evictionCount = 0;
     randomizeStartingRelationships(state);
@@ -109,7 +128,7 @@
     });
 
     const field = living(state);
-    const hohComp = C().runCompetition(field);
+    const hohComp = C().runCompetition(field,{week:1,type:"hoh"});
     let hohWinner = hohComp.winner;
 
     log(state, {
@@ -124,7 +143,7 @@
     let doubleOrNothing = null;
 
     if (accepts) {
-      const decider = C().runCompetition(field, { category: hohComp.category });
+      const decider = C().runCompetition(field, { week:1,type:"hoh", category: hohComp.category });
       if (decider.winner.id === hohWinner.id) {
         doubleOrNothing = { teamId: hohWinner.teamId, hohId: hohWinner.id, extraWeek: true };
         log(state, {
@@ -170,6 +189,7 @@
   // ---------------------------------------------------------------------
 
   function runWeek(state, config, week) {
+    state.week = week;
     clearWeeklyFlags(state);
     const teamPhase = week <= config.teamWeeks;
     const highRollerPhase = week > config.teamWeeks && week <= config.teamWeeks + config.highRollerWeeks;
@@ -225,7 +245,7 @@
       }).filter(Boolean);
 
       if (reps.length) {
-        const wc = C().runCompetition(reps);
+        const wc = C().runCompetition(reps,{week,type:"wildcard"});
         wc.winner.safe = true;
         individualSafe.push(wc.winner.id);
         log(state, {
@@ -289,13 +309,7 @@
     povPool.push(...others.slice(0, Math.max(0, 6 - povPool.length)));
     state.povPlayers = povPool.map(h => h.id);
 
-    log(state, {
-      week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard",
-      type: "pov-players", title: "Power of Veto Players",
-      lines: [povPool.map(displayName).join(", ")]
-    });
-
-    const povComp = C().runCompetition(povPool);
+    const povComp = C().runCompetition(povPool,{week,type: week>=9&&week%1===0 ? (week===9||week===10 ? "pov" : "pov") : "pov"});
     const vetoWinner = povComp.winner;
     state.vetoWinners = [vetoWinner.id];
     log(state, {
@@ -323,7 +337,6 @@
       const savedHg = nominees.find(n => n.id === saved.savedId);
       savedHg.nominated = false;
       nominees = nominees.filter(n => n.id !== saved.savedId);
-      state.nominees = nominees.map(n => n.id);
       log(state, {
         week, phase: "standard", type: "veto-ceremony",
         title: "Veto Ceremony — Used",
@@ -334,6 +347,7 @@
       if (replacement) {
         replacement.nominated = true;
         nominees.push(replacement);
+        state.nominees = nominees.map(n => n.id);
         state.nominees = nominees.map(n => n.id);
         log(state, {
           week, phase: "standard", type: "nominations",
@@ -359,9 +373,8 @@
         nominees.push(h);
       });
     }
-    state.nominees = nominees.map(h => h.id);
     const finalNoms = nominees.slice(0, 2);
-    state.nominees = finalNoms.map(h => h.id);
+    state.nominees = finalNoms.map(n => n.id);
     const voters = living(state).filter(h => h.id !== hoh.id && !finalNoms.includes(h));
     const votesToEvict = { [finalNoms[0].id]: 0, [finalNoms[1].id]: 0 };
     const voteLog = [];
@@ -370,7 +383,7 @@
     voters.forEach(voter => {
       const votedOutId = R().decideVote(state, voter, finalNoms[0], finalNoms[1], hoh);
       votesToEvict[votedOutId]++;
-      state.evictionVotes.push({ voterId: voter.id, vote: votedOutId });
+      state.evictionVotes.push({ voterId: voter.id, targetId: votedOutId });
       voteLog.push(`${displayName(voter)} votes to evict ${displayName(state.houseguests.find(h => h.id === votedOutId))}.`);
     });
 
@@ -397,6 +410,7 @@
       state.jury.push(evicted.id);
     }
     state.evicted.push(evicted.id);
+    state.nominees = finalNoms.map(n => n.id);
 
     log(state, {
       week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "eviction-voting",
@@ -412,12 +426,6 @@
         evicted.juryMember ? `${displayName(evicted)} will join the jury.` : `${displayName(evicted)}'s journey ends here — finishing in ${ordinal(evicted.placement)} place.`
       ]
     });
-
-    evicted.nominated = false;
-    stays.nominated = false;
-    state.nominees = [];
-    state.povPlayers = [];
-    state.vetoWinners = [];
 
     if (Math.random() < 0.55) {
       const alliance = R().formAlliances(state, week);
@@ -496,14 +504,15 @@
   // ---------------------------------------------------------------------
 
   function runFinale(state, config) {
+    state.week = "Final";
     const finalThree = living(state);
     if (finalThree.length !== 3) return;
 
-    const part1 = C().runCompetition(finalThree);
+    const part1 = C().runCompetition(finalThree,{week:12,type:"final-hoh-1"});
     const part1Winner = part1.winner;
     const remaining = finalThree.filter(h => h.id !== part1Winner.id);
 
-    const part2 = C().runCompetition(remaining, { category: part1.category === "physical" ? "mental" : "physical" });
+    const part2 = C().runCompetition(remaining,{week:12,type:"final-hoh-2",category:part1.category==="physical"?"mental":"physical"});
     const part2Winner = part2.winner;
     const part2Loser = remaining.find(h => h.id !== part2Winner.id);
 
@@ -518,7 +527,7 @@
       lines: [`${displayName(part2Winner)} defeats ${displayName(part2Loser)} to advance to Part 3.`]
     });
 
-    const part3 = C().runCompetition([part1Winner, part2Winner]);
+    const part3 = C().runCompetition([part1Winner, part2Winner],{week:12,type:"final-hoh-3"});
     const finalHoh = part3.winner;
     const part3Loser = part1Winner.id === finalHoh.id ? part2Winner : part1Winner;
 
@@ -596,10 +605,21 @@
     state.history = [];
     state.jury = [];
     state.evicted = [];
+    state.evictionVotes = [];
+    state.nominees = [];
+    state.povPlayers = [];
+    state.vetoWinners = [];
+    state.currentHOH = null;
+    state.originalHOH = null;
+    state.secretHOH = null;
+    state.dethronedHOH = null;
     state.finale = null;
-    state.currentEventIndex = -1;
-    state.ui = { revealedEvents: 0 };
+    state.week = 0;
     state.phase = "premiere";
+    state.houseguests.forEach(h => {
+      h.active = true; h.safe = false; h.nominated = false;
+      h.juryMember = false; h.evicted = false; h.placement = null;
+    });
 
     runPremiere(state, config);
 
