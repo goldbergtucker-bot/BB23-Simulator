@@ -84,8 +84,7 @@
 
       phase: "setup",
       week: 0,
-      currentEventIndex: -1,
-      ui: { revealedEvents: 0 },
+      day: 0,
 
       houseguests,
       teams: config.teams.map(team => ({
@@ -98,6 +97,9 @@
       relationships,
 
       currentHOH: null,
+      originalHOH: null,
+      secretHOH: null,
+      dethronedHOH: null,
       nominees: [],
       povPlayers: [],
       vetoWinners: [],
@@ -109,6 +111,7 @@
       powers: [],
 
       history: [],
+      currentEventIndex: -1,
       finale: null
     };
   }
