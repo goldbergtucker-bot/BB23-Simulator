@@ -72,7 +72,7 @@
     });
 
     return {
-      version: 1,
+      version: 2,
       season: {
         id: config.seasonId,
         number: config.seasonNumber,
@@ -84,6 +84,8 @@
 
       phase: "setup",
       week: 0,
+      currentEventIndex: -1,
+      ui: { revealedEvents: 0 },
 
       houseguests,
       teams: config.teams.map(team => ({
