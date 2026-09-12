@@ -291,6 +291,107 @@ pre {
 
 .toast.show { opacity: 1; transform: translateY(0); }
 
+.hidden { display: none !important; }
+
+.start-hero, .season-hero { align-items: center; }
+
+.season-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(260px, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.feed-card { max-height: 78vh; display: flex; flex-direction: column; }
+.feed {
+  overflow-y: auto;
+  padding-right: 4px;
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.feed-week-header {
+  margin-top: 6px;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+}
+
+.feed-entry {
+  background: #0d111c;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  animation: feedIn .3s ease;
+}
+
+.feed-entry-tag {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .1em;
+  color: var(--accent-2);
+  margin-bottom: 6px;
+}
+
+.feed-entry h3 { margin: 0 0 8px; font-size: 15px; }
+.feed-entry ul { margin: 0; padding-left: 18px; color: #cbd3e2; font-size: 13px; line-height: 1.6; display: grid; gap: 3px; }
+
+.feed-winner { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(239,181,30,.4); }
+.feed-eviction { border-color: rgba(227,79,95,.4); }
+.feed-twist, .feed-power { border-color: rgba(111,124,255,.5); }
+
+@keyframes feedIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.cast-status-card { position: sticky; top: 16px; max-height: 78vh; overflow-y: auto; }
+.cast-status-list { display: grid; gap: 8px; }
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #0d111c;
+  border: 1px solid var(--border);
+}
+
+.status-row.is-out { opacity: .55; }
+.status-row-body { flex: 1; min-width: 0; }
+.status-row-name { font-weight: 800; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.status-row-sub { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .06em; }
+
+.status-pill {
+  font-size: 10px;
+  font-weight: 900;
+  padding: 4px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  letter-spacing: .04em;
+}
+
+.status-pill.active { background: rgba(156,167,188,.12); color: var(--muted); }
+.status-pill.safe { background: rgba(69,199,138,.14); color: var(--success); }
+.status-pill.hoh { background: rgba(239,181,30,.16); color: var(--accent); }
+.status-pill.nominated { background: rgba(227,79,95,.14); color: #ff9aa5; }
+.status-pill.evicted { background: rgba(156,167,188,.1); color: var(--muted); }
+.status-pill.jury { background: rgba(111,124,255,.16); color: var(--accent-2); }
+.status-pill.runner-up { background: rgba(239,181,30,.12); color: var(--accent); }
+.status-pill.winner { background: var(--accent); color: #111; }
+
+@media (max-width: 900px) {
+  .season-layout { grid-template-columns: 1fr; }
+  .cast-status-card { position: static; max-height: none; }
+}
+
 @media (max-width: 1000px) {
   .cast-grid { grid-template-columns: repeat(3, 1fr); }
   .teams-grid { grid-template-columns: repeat(2, 1fr); }
