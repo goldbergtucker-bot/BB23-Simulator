@@ -10,20 +10,23 @@
   <header class="topbar">
     <div>
       <div class="eyebrow">CUSTOM BIG BROTHER SIMULATOR</div>
-      <h1>BIG BROTHER 23</h1>
-      <p>Stage 1 — Custom Cast Setup</p>
+      <h1 id="pageTitle">BIG BROTHER 23</h1>
+      <p id="pageSubtitle">Custom Cast Setup</p>
     </div>
-    <div class="badge">BB23 TEMPLATE</div>
+    <div class="badge" id="pageBadge">BB23 TEMPLATE</div>
   </header>
 
   <main class="container">
+    <section id="setupView">
     <section class="card hero">
       <div>
         <h2>Create Your BB23 Cast</h2>
         <p>
           Build a custom 16-person cast using the Big Brother 23 team format.
           This stage creates the cast, ratings, portraits, relationships, teams,
-          and initial simulator state. No actual season simulation occurs yet.
+          and initial simulator state. Once your cast is ready, start the season
+          to simulate the real BB23 format — teams, Wildcard, High Roller's
+          Room, and a full jury finale — end to end.
         </p>
       </div>
       <div class="hero-actions">
@@ -83,21 +86,65 @@
       <div id="teamsGrid" class="teams-grid"></div>
     </section>
 
+    <section class="card hero start-hero">
+      <div>
+        <h2>Ready to Play?</h2>
+        <p>This simulates the full BB23 format automatically — you watch it play out, week by week.</p>
+      </div>
+      <div class="hero-actions">
+        <button id="startSeasonBtn">Start The Season</button>
+      </div>
+    </section>
+
     <section class="card state-card">
       <div class="section-heading">
         <div>
           <h2>Initial Simulator State</h2>
-          <p>The game engine starts here. Later stages will advance this state week by week.</p>
+          <p>The game engine starts here. Starting the season will advance this state week by week.</p>
         </div>
         <span id="validity" class="status">Checking cast…</span>
       </div>
       <pre id="statePreview"></pre>
     </section>
+    </section>
+
+    <section id="seasonView" class="hidden">
+      <section class="card hero season-hero">
+        <div>
+          <h2 id="seasonHeading">Big Brother 23 — Custom Cast</h2>
+          <p id="seasonStatusLine">The season is underway.</p>
+        </div>
+        <div class="hero-actions">
+          <button id="revealNextBtn">Reveal Next</button>
+          <button id="revealAllBtn" class="secondary">Reveal Rest</button>
+          <button id="backToSetupBtn" class="danger">New Season</button>
+        </div>
+      </section>
+
+      <div class="season-layout">
+        <section class="card feed-card">
+          <div class="section-heading">
+            <div><h2>Season Feed</h2><p>Revealed week by week, like watching the episodes air.</p></div>
+          </div>
+          <div id="feed" class="feed"></div>
+        </section>
+
+        <section class="card cast-status-card">
+          <div class="section-heading">
+            <div><h2>Houseguests</h2><p>Live status &amp; placements.</p></div>
+          </div>
+          <div id="castStatusList" class="cast-status-list"></div>
+        </section>
+      </div>
+    </section>
   </main>
 
   <div id="toast" class="toast" role="status"></div>
-  <script src="js/data/bb23-config.js"></script>
-  <script src="js/engine/game-state.js"></script>
-  <script src="js/app.js"></script>
+  <script src="data/bb23-config.js"></script>
+  <script src="engine/game-state.js"></script>
+  <script src="engine/competitions.js"></script>
+  <script src="engine/relationships.js"></script>
+  <script src="engine/season-engine.js"></script>
+  <script src="app.js"></script>
 </body>
 </html>
