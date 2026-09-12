@@ -342,6 +342,9 @@ pre {
 .feed-entry h3 { margin: 0 0 8px; font-size: 15px; }
 .feed-entry ul { margin: 0; padding-left: 18px; color: #cbd3e2; font-size: 13px; line-height: 1.6; display: grid; gap: 3px; }
 
+
+/* Brantsteele-style event chain */
+.event-card{background:#0d111c;border:1px solid var(--border);border-radius:12px;padding:14px 16px;animation:feedIn .25s ease}.event-card h3{margin:5px 0 9px;font-size:15px}.event-top{display:flex;justify-content:space-between;gap:10px;align-items:center}.event-tag,.event-label{font-size:10px;font-weight:900;letter-spacing:.1em}.event-tag{color:var(--accent-2)}.event-label{color:var(--accent)}.event-card ul{margin:0;padding-left:18px;color:#cbd3e2;font-size:13px;line-height:1.55;display:grid;gap:3px}.event-portraits{display:flex;flex-wrap:wrap;gap:10px;margin:10px 0 12px}.event-person{width:76px;text-align:center;font-size:9px;font-weight:800;color:#aeb8ca}.event-portrait{width:54px;height:54px;margin:0 auto 4px;border-radius:50%;object-fit:cover;background:#252c3e;border:2px solid var(--border);display:grid;place-items:center;color:#8e9bb2;font-weight:900}.event-portrait.small{width:32px;height:32px;margin:0}.event-winner{border-color:var(--accent)}.event-eviction{border-color:rgba(227,79,95,.55)}.event-twist,.event-power,.event-high-roller-room{border-color:rgba(111,124,255,.55)}
 .feed-winner { border-color: var(--accent); box-shadow: 0 0 0 1px rgba(239,181,30,.4); }
 .feed-eviction { border-color: rgba(227,79,95,.4); }
 .feed-twist, .feed-power { border-color: rgba(111,124,255,.5); }
@@ -406,3 +409,5 @@ pre {
 @media (max-width: 460px) {
   .cast-grid, .teams-grid { grid-template-columns: 1fr; }
 }
+
+#revealPrevBtn:disabled{opacity:.45;cursor:not-allowed}
