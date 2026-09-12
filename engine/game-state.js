@@ -44,7 +44,12 @@
       nominated: false,
       juryMember: false,
       evicted: false,
-      placement: null
+      placement: null,
+      stats: {
+        daysPlayed: 0, hohWins: 0, povWins: 0, wildcardWins: 0,
+        nominations: 0, votesAgainst: 0, evictionVotesCast: 0,
+        competitionWins: 0, juryVotesReceived: 0
+      }
     };
   }
 
@@ -112,7 +117,8 @@
 
       history: [],
       currentEventIndex: -1,
-      finale: null
+      finale: null,
+      statistics: {}
     };
   }
 
