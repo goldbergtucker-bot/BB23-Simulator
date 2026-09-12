@@ -33,16 +33,70 @@
       houseguests: state.houseguests.map(h => ({
         id:h.id, slot:h.slot, firstName:h.firstName, lastName:h.lastName,
         portraitUrl:h.portraitUrl, teamId:h.teamId, active:h.active, safe:h.safe,
-        nominated:h.nominated, juryMember:h.juryMember, evicted:h.evicted, placement:h.placement
+        nominated:h.nominated, juryMember:h.juryMember, evicted:h.evicted, placement:h.placement,
+        stats: h.stats ? JSON.parse(JSON.stringify(h.stats)) : null
       })),
       finale: state.finale ? JSON.parse(JSON.stringify(state.finale)) : null
     };
   }
 
+  function eventData(state, entry) {
+    const ids = arr => (Array.isArray(arr) ? arr : []).filter(Boolean);
+    let participants = ids(entry.participantIds);
+    let winnerId = entry.winnerId || null;
+    let nomineeIds = ids(entry.nomineeIds);
+    let playerIds = ids(entry.playerIds);
+    let voterIds = ids(entry.voterIds);
+    let votes = Array.isArray(entry.votes) ? entry.votes.slice() : [];
+
+    if (!participants.length) {
+      switch (entry.type) {
+        case 'teams': participants = state.houseguests.filter(h => h.active).map(h => h.id); break;
+        case 'hoh': winnerId = winnerId || state.currentHOH; participants = winnerId ? [winnerId] : []; break;
+        case 'wildcard': participants = playerIds.length ? playerIds : (winnerId ? [winnerId] : []); break;
+        case 'nominations':
+        case 'veto-ceremony': participants = nomineeIds.length ? nomineeIds : ids(state.nominees); break;
+        case 'veto':
+          playerIds = playerIds.length ? playerIds : ids(state.povPlayers);
+          winnerId = winnerId || (state.vetoWinners && state.vetoWinners[0]);
+          participants = playerIds;
+          break;
+        case 'eviction-voting':
+          voterIds = voterIds.length ? voterIds : state.evictionVotes.map(v => v.voterId);
+          nomineeIds = nomineeIds.length ? nomineeIds : ids(state.nominees);
+          participants = [...new Set(voterIds.concat(nomineeIds))];
+          votes = votes.length ? votes : state.evictionVotes.slice();
+          break;
+        case 'eviction': participants = [entry.evictedId, entry.staysId].filter(Boolean); break;
+        case 'alliance': participants = ids(entry.memberIds); break;
+        case 'final3-part1':
+        case 'final3-part2':
+        case 'final3-part3': participants = playerIds; break;
+        case 'final-decision': participants = [entry.hohId, entry.evictedId, entry.finalistId].filter(Boolean); break;
+        case 'jury-vote': participants = ids(entry.jurorIds).concat(ids(entry.finalistIds)); break;
+        case 'winner': participants = [entry.winnerId, entry.runnerUpId].filter(Boolean); break;
+      }
+    }
+
+    return {
+      participantIds: [...new Set(participants)],
+      playerIds: [...new Set(playerIds)],
+      nomineeIds: [...new Set(nomineeIds)],
+      voterIds: [...new Set(voterIds)],
+      winnerId,
+      votes,
+      evictedId: entry.evictedId || null,
+      staysId: entry.staysId || null,
+      hohId: entry.hohId || state.currentHOH || null,
+      memberIds: ids(entry.memberIds),
+      finalistIds: ids(entry.finalistIds),
+      jurorIds: ids(entry.jurorIds)
+    };
+  }
+
   function log(state, entry) {
     const record = Object.assign({ id: state.history.length + 1 }, entry);
-    // Every event owns a frozen-in-time view snapshot. The UI never has to
-    // rerun the simulation or read the final state to render an earlier event.
+    record.data = eventData(state, entry);
     record.snapshot = viewSnapshot(state);
     state.history.push(record);
   }
@@ -134,6 +188,7 @@
     log(state, {
       week: 1, phase: "premiere", type: "hoh",
       title: `Premiere HOH — ${hohComp.label}`,
+      winnerId: hohWinner.id, playerIds: field.map(h => h.id),
       lines: [`${displayName(hohWinner)} wins the first Head of Household competition (${hohComp.category}).`]
     });
 
@@ -215,6 +270,7 @@
       log(state, {
         week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "hoh",
         title: `Head of Household — ${comp.label}`,
+        winnerId: hoh.id, playerIds: pool.map(h => h.id),
         lines: [`${displayName(hoh)} wins HOH (${comp.category}).`]
       });
     }
@@ -251,6 +307,7 @@
         log(state, {
           week, phase: "team", type: "wildcard",
           title: `Wildcard Competition — ${wc.label}`,
+          winnerId: wc.winner.id, playerIds: reps.map(h => h.id),
           lines: [`${displayName(wc.winner)} wins the Wildcard and is individually safe this week — a target now sits on their back.`]
         });
       }
@@ -270,6 +327,7 @@
     log(state, {
       week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "nominations",
       title: "Nomination Ceremony",
+      hohId: hoh.id, nomineeIds: nominees.map(h => h.id), participantIds: [hoh.id, ...nominees.map(h => h.id)],
       lines: [`${displayName(hoh)} nominates ${nominees.map(displayName).join(" and ")} for eviction.`]
     });
 
@@ -315,6 +373,7 @@
     log(state, {
       week, phase: "standard", type: "veto",
       title: `Power of Veto — ${povComp.label}`,
+      winnerId: vetoWinner.id, playerIds: povPool.map(h => h.id),
       lines: [`${displayName(vetoWinner)} wins the Power of Veto (${povComp.category}).`]
     });
 
@@ -340,6 +399,7 @@
       log(state, {
         week, phase: "standard", type: "veto-ceremony",
         title: "Veto Ceremony — Used",
+        participantIds: [saved.holder.id, savedHg.id, hoh.id], nomineeIds: nominees.map(h => h.id),
         lines: [`${displayName(saved.holder)} uses the Power of Veto on ${displayName(savedHg)}.`]
       });
       const replacementPool = living(state).filter(h => h.id !== hoh.id && !h.safe && !nominees.includes(h) && h.id !== savedHg.id);
@@ -359,6 +419,7 @@
       log(state, {
         week, phase: "standard", type: "veto-ceremony",
         title: "Veto Ceremony — Not Used",
+        nomineeIds: nominees.map(h => h.id), participantIds: [hoh.id, ...nominees.map(h => h.id)],
         lines: [`The Power of Veto is not used. Nominations remain the same.`]
       });
     }
@@ -400,7 +461,19 @@
     const evicted = state.houseguests.find(h => h.id === evictedId);
     const stays = finalNoms.find(n => n.id !== evictedId);
 
+    // Reveal the live vote while both nominees are still active. The eviction
+    // state changes only after this event is recorded, so the UI can faithfully
+    // show the voting moment before revealing the result.
+    log(state, {
+      week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "eviction-voting",
+      title: `Eviction Vote (${finalNoms.map(displayName).join(" vs ")})`,
+      nomineeIds: finalNoms.map(h => h.id), voterIds: voters.map(h => h.id), votes: state.evictionVotes.slice(),
+      participantIds: voters.map(h => h.id).concat(finalNoms.map(h => h.id)),
+      lines: voteLog
+    });
+
     evicted.active = false;
+    evicted.evicted = true;
     state.season.evictionCount++;
     evicted.placement = placementForEvictionIndex(state, state.season.evictionCount);
 
@@ -413,14 +486,9 @@
     state.nominees = finalNoms.map(n => n.id);
 
     log(state, {
-      week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "eviction-voting",
-      title: `Eviction Vote (${finalNoms.map(displayName).join(" vs ")})`,
-      lines: voteLog
-    });
-
-    log(state, {
       week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "eviction",
       title: "Eviction",
+      evictedId: evicted.id, staysId: stays.id, nomineeIds: finalNoms.map(h => h.id), participantIds: [evicted.id, stays.id],
       lines: [
         `By a vote of ${votesToEvict[evictedId]}-${votesToEvict[stays.id]}, ${displayName(evicted)} is evicted from the Big Brother house.`,
         evicted.juryMember ? `${displayName(evicted)} will join the jury.` : `${displayName(evicted)}'s journey ends here — finishing in ${ordinal(evicted.placement)} place.`
@@ -519,11 +587,13 @@
     log(state, {
       week: "Final", phase: "finale", type: "final3-part1",
       title: `Final 3 — Part 1 (${part1.label})`,
+      winnerId: part1Winner.id, playerIds: finalThree.map(h => h.id),
       lines: [`${displayName(part1Winner)} wins Part 1 and advances directly to Part 3.`]
     });
     log(state, {
       week: "Final", phase: "finale", type: "final3-part2",
       title: `Final 3 — Part 2 (${part2.label})`,
+      winnerId: part2Winner.id, playerIds: remaining.map(h => h.id),
       lines: [`${displayName(part2Winner)} defeats ${displayName(part2Loser)} to advance to Part 3.`]
     });
 
@@ -534,6 +604,7 @@
     log(state, {
       week: "Final", phase: "finale", type: "final3-part3",
       title: `Final 3 — Part 3: Final HOH (${part3.label})`,
+      winnerId: finalHoh.id, playerIds: [part1Winner.id, part2Winner.id],
       lines: [`${displayName(finalHoh)} wins the final Head of Household and controls the final decision.`]
     });
 
@@ -550,6 +621,8 @@
     log(state, {
       week: "Final", phase: "finale", type: "final-decision",
       title: "Final HOH's Decision",
+      hohId: finalHoh.id, evictedId: evictedThird.id, finalistId: takenToFinal2.id,
+      participantIds: [finalHoh.id, evictedThird.id, takenToFinal2.id],
       lines: [`${displayName(finalHoh)} chooses to evict ${displayName(evictedThird)}, taking ${displayName(takenToFinal2)} to the Final 2.`,
         `${displayName(evictedThird)} finishes in 3rd place and joins the jury.`]
     });
@@ -557,15 +630,19 @@
     const finalists = [finalHoh, takenToFinal2];
     const jurors = state.jury.map(id => state.houseguests.find(h => h.id === id)).filter(Boolean);
     const tally = { [finalists[0].id]: 0, [finalists[1].id]: 0 };
+    const juryVotes = [];
     const juryLines = jurors.map(juror => {
       const vote = R().decideJuryVote(state, juror, finalists[0], finalists[1]);
       tally[vote]++;
+      juryVotes.push({ voterId: juror.id, targetId: vote });
       return `${displayName(juror)} votes for ${displayName(state.houseguests.find(h => h.id === vote))}.`;
     });
 
     log(state, {
       week: "Final", phase: "finale", type: "jury-vote",
       title: "The Jury Votes",
+      jurorIds: jurors.map(h => h.id), finalistIds: finalists.map(h => h.id),
+      votes: juryVotes,
       lines: juryLines
     });
 
@@ -587,6 +664,7 @@
     log(state, {
       week: "Final", phase: "finale", type: "winner",
       title: `${displayName(winner)} Wins Big Brother!`,
+      winnerId, runnerUpId, participantIds: [winnerId, runnerUpId],
       lines: [`By a vote of ${tally[winnerId]}-${tally[runnerUpId]}, ${displayName(winner)} is crowned the winner of Big Brother over ${displayName(runnerUp)}.`]
     });
   }
@@ -595,6 +673,41 @@
     const s = ["th", "st", "nd", "rd"];
     const v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  }
+
+  function calculateStatistics(state) {
+    const stats = {};
+    state.houseguests.forEach(h => {
+      stats[h.id] = Object.assign({
+        daysPlayed: 0, hohWins: 0, povWins: 0, wildcardWins: 0,
+        nominations: 0, votesAgainst: 0, evictionVotesCast: 0,
+        competitionWins: 0, juryVotesReceived: 0
+      }, h.stats || {});
+    });
+
+    state.history.forEach(entry => {
+      const d = entry.data || {};
+      if (d.winnerId && stats[d.winnerId]) {
+        if (entry.type === 'hoh') stats[d.winnerId].hohWins++;
+        if (entry.type === 'veto') stats[d.winnerId].povWins++;
+        if (entry.type === 'wildcard') stats[d.winnerId].wildcardWins++;
+        if (['hoh','veto','wildcard','final3-part1','final3-part2','final3-part3'].includes(entry.type)) stats[d.winnerId].competitionWins++;
+      }
+      (d.nomineeIds || []).forEach(id => { if (stats[id]) stats[id].nominations++; });
+      (d.votes || []).forEach(v => {
+        if (stats[v.voterId]) stats[v.voterId].evictionVotesCast++;
+        if (stats[v.targetId]) stats[v.targetId].votesAgainst++;
+      });
+      if (entry.type === 'jury-vote') (d.votes || []).forEach(v => { if (stats[v.targetId]) stats[v.targetId].juryVotesReceived++; });
+    });
+
+    const maxWeek = Math.max(0, ...state.history.map(e => typeof e.week === 'number' ? e.week : 0));
+    state.houseguests.forEach(h => {
+      const evictionWeek = state.history.find(e => e.type === 'eviction' && e.data?.evictedId === h.id)?.week;
+      stats[h.id].daysPlayed = typeof evictionWeek === 'number' ? Math.max(1, evictionWeek * 7) : Math.max(1, (maxWeek + 1) * 7);
+      h.stats = stats[h.id];
+    });
+    state.statistics = stats;
   }
 
   // ---------------------------------------------------------------------
@@ -614,11 +727,13 @@
     state.secretHOH = null;
     state.dethronedHOH = null;
     state.finale = null;
+    state.statistics = {};
     state.week = 0;
     state.phase = "premiere";
     state.houseguests.forEach(h => {
       h.active = true; h.safe = false; h.nominated = false;
       h.juryMember = false; h.evicted = false; h.placement = null;
+      h.stats = { daysPlayed:0, hohWins:0, povWins:0, wildcardWins:0, nominations:0, votesAgainst:0, evictionVotesCast:0, competitionWins:0, juryVotesReceived:0 };
     });
 
     runPremiere(state, config);
@@ -631,8 +746,9 @@
       safety++;
     }
     runFinale(state, config);
+    calculateStatistics(state);
     return state;
   }
 
-  window.SeasonEngine = { simulateSeason, displayName, ordinal };
+  window.SeasonEngine = { simulateSeason, displayName, ordinal, calculateStatistics };
 })();
