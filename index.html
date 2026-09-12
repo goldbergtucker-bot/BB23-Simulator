@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Big Brother 23 — Custom Simulator</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <div>
+      <div class="eyebrow">CUSTOM BIG BROTHER SIMULATOR</div>
+      <h1>BIG BROTHER 23</h1>
+      <p>Stage 1 — Custom Cast Setup</p>
+    </div>
+    <div class="badge">BB23 TEMPLATE</div>
+  </header>
+
+  <main class="container">
+    <section class="card hero">
+      <div>
+        <h2>Create Your BB23 Cast</h2>
+        <p>
+          Build a custom 16-person cast using the Big Brother 23 team format.
+          This stage creates the cast, ratings, portraits, relationships, teams,
+          and initial simulator state. No actual season simulation occurs yet.
+        </p>
+      </div>
+      <div class="hero-actions">
+        <button id="loadDemoBtn" class="secondary">Load Demo Cast</button>
+        <button id="resetBtn" class="danger">Reset</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-heading">
+        <div>
+          <h2>Season Settings</h2>
+          <p>These settings are stored with your custom season.</p>
+        </div>
+      </div>
+      <div class="settings-grid">
+        <label>
+          Season Name
+          <input id="seasonName" type="text" value="Big Brother 23 — Custom Cast">
+        </label>
+        <label>
+          Theme / Background URL
+          <input id="themeUrl" type="url" placeholder="https://...">
+        </label>
+        <label>
+          Logo URL
+          <input id="logoUrl" type="url" placeholder="https://...">
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-heading">
+        <div>
+          <h2>Houseguests</h2>
+          <p>Exactly 16 players are used for the BB23 format.</p>
+        </div>
+        <div class="section-actions">
+          <button id="saveBtn" class="secondary">Save Season</button>
+          <button id="exportBtn">Export JSON</button>
+          <label class="file-button secondary">
+            Import JSON
+            <input id="importInput" type="file" accept=".json,application/json">
+          </label>
+        </div>
+      </div>
+      <div id="castGrid" class="cast-grid"></div>
+    </section>
+
+    <section class="card">
+      <div class="section-heading">
+        <div>
+          <h2>BB23 Teams</h2>
+          <p>Stage 1 uses the four original BB23 team names. Team drafting will be added to the premiere engine in a later stage.</p>
+        </div>
+      </div>
+      <div id="teamsGrid" class="teams-grid"></div>
+    </section>
+
+    <section class="card state-card">
+      <div class="section-heading">
+        <div>
+          <h2>Initial Simulator State</h2>
+          <p>The game engine starts here. Later stages will advance this state week by week.</p>
+        </div>
+        <span id="validity" class="status">Checking cast…</span>
+      </div>
+      <pre id="statePreview"></pre>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script src="js/data/bb23-config.js"></script>
+  <script src="js/engine/game-state.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
