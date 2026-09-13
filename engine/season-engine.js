@@ -523,7 +523,7 @@
     state.season.evictionCount++;
     evicted.placement = placementForEvictionIndex(state, state.season.evictionCount);
 
-    const juryThreshold = config.juryThresholdPlacement || 9;
+    const juryThreshold = config.juryThresholdPlacement || 11;
     if (evicted.placement <= juryThreshold) {
       evicted.juryMember = true;
       state.jury.push(evicted.id);
