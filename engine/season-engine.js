@@ -52,7 +52,12 @@
   function buildEventData(state, entry) {
     const ids = a => Array.isArray(a) ? a.slice() : [];
     const base = { intendedTarget: state.intendedTarget || null, backdoorTargetId: state.backdoorTargetId || null, targetHistory: Array.isArray(state.targetHistory) ? state.targetHistory.slice() : [], competition: entry.competition ? JSON.parse(JSON.stringify(entry.competition)) : null, participants: [], nomineeIds: ids(state.nominees), povPlayers: ids(state.povPlayers), winnerId: entry.winnerId || null, hohId: entry.hohId || state.currentHOH || null, evictedId: entry.evictedId || null };
-    if (entry.type === "hoh") { base.winnerId = entry.winnerId || state.currentHOH || null; base.participants = living(state).map(h => h.id); }
+    if (entry.type === "hoh") {
+      base.winnerId = entry.winnerId || state.currentHOH || null;
+      // Use the actual competition field, not the post-competition living roster.
+      // This prevents the outgoing HOH from appearing in the next HOH competition.
+      base.participants = entry.competition?.ranking?.map(x => x.id) || living(state).filter(h => h.id !== base.winnerId).map(h => h.id);
+    }
     if (entry.type === "wildcard") base.winnerId = (state.history.length && state.history[state.history.length-1]?.winnerId) || null;
     if (entry.type === "veto") { base.winnerId = entry.winnerId || state.vetoWinners?.[0] || null; base.participants = []; }
     if (entry.type === "veto-ceremony") {
