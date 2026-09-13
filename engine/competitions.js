@@ -19,7 +19,7 @@
     const label=schedule?.name||opts.label||({physical:"Physical Competition",mental:"Mental Competition",social:"Social Competition",strategic:"Strategic Competition"}[category]||"Big Brother Competition");
     const weights=schedule?.skills||({[category]:.7,general:.3});
     const scored=candidates.map(h=>{const base=skillScore(h,weights);const noise=(opts.noiseMin??.82)+Math.random()*((opts.noiseMax??1.18)-(opts.noiseMin??.82));return{hg:h,score:base*noise}}).sort((a,b)=>b.score-a.score);
-    return{category,label,winner:scored[0].hg,ranking:scored.map(x=>({id:x.hg.id,score:Math.round(x.score*10)/10}))};
+    return{category,label,description:schedule?.description||"A Big Brother competition testing skill, strategy, memory or endurance.",winner:scored[0].hg,ranking:scored.map(x=>({id:x.hg.id,score:Math.round(x.score*10)/10}))};
   }
   window.Competitions={runCompetition,pickCategory,competitionLabel:(c)=>c};
 })();
