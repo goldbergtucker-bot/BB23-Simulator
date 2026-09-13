@@ -25,6 +25,9 @@
       secretHOH: state.secretHOH || null,
       dethronedHOH: state.dethronedHOH || null,
       nominees: Array.isArray(state.nominees) ? state.nominees.slice() : [],
+      intendedTarget: state.intendedTarget || null,
+      targetHistory: Array.isArray(state.targetHistory) ? state.targetHistory.slice() : [],
+      backdoorTargetId: state.backdoorTargetId || null,
       povPlayers: Array.isArray(state.povPlayers) ? state.povPlayers.slice() : [],
       vetoWinners: Array.isArray(state.vetoWinners) ? state.vetoWinners.slice() : [],
       evictionVotes: Array.isArray(state.evictionVotes) ? state.evictionVotes.slice() : [],
@@ -48,7 +51,7 @@
 
   function buildEventData(state, entry) {
     const ids = a => Array.isArray(a) ? a.slice() : [];
-    const base = { competition: entry.competition ? JSON.parse(JSON.stringify(entry.competition)) : null, participants: [], nomineeIds: ids(state.nominees), povPlayers: ids(state.povPlayers), winnerId: entry.winnerId || null, hohId: entry.hohId || state.currentHOH || null, evictedId: entry.evictedId || null };
+    const base = { intendedTarget: state.intendedTarget || null, backdoorTargetId: state.backdoorTargetId || null, targetHistory: Array.isArray(state.targetHistory) ? state.targetHistory.slice() : [], competition: entry.competition ? JSON.parse(JSON.stringify(entry.competition)) : null, participants: [], nomineeIds: ids(state.nominees), povPlayers: ids(state.povPlayers), winnerId: entry.winnerId || null, hohId: entry.hohId || state.currentHOH || null, evictedId: entry.evictedId || null };
     if (entry.type === "hoh") { base.winnerId = entry.winnerId || state.currentHOH || null; base.participants = living(state).map(h => h.id); }
     if (entry.type === "wildcard") base.winnerId = (state.history.length && state.history[state.history.length-1]?.winnerId) || null;
     if (entry.type === "veto") { base.winnerId = entry.winnerId || state.vetoWinners?.[0] || null; base.participants = []; }
@@ -58,9 +61,10 @@
       base.nomineeIds = ids(state.nominees);
       base.finalNomineeIds = ids(state.nominees);
       base.vetoUsed = !!entry.vetoUsed;
-      base.savedId = entry.savedId || null;
-      base.replacementId = entry.replacementId || null;
       base.participants = [base.hohId, base.winnerId, ...base.nomineeIds].filter(Boolean);
+      base.intendedTarget = entry.intendedTarget || state.intendedTarget || null;
+      base.backdoorTargetId = entry.backdoorTargetId || state.backdoorTargetId || null;
+      base.targetHistory = Array.isArray(entry.targetHistory) ? entry.targetHistory.slice() : (Array.isArray(state.targetHistory) ? state.targetHistory.slice() : []);
     }
     if (entry.type === "pov-players") {
       base.povPlayers = ids(state.povPlayers);
@@ -74,7 +78,7 @@
       base.nomineeIds = ids(state.nominees);
     }
     if (entry.type === "eviction-voting") { base.nomineeIds = ids(state.nominees); base.voterIds = (state.evictionVotes||[]).map(v=>v.voterId); base.votes = (state.evictionVotes||[]).map(v=>({voterId:v.voterId,targetId:v.targetId})); }
-    if (entry.type === "eviction") { const id=(state.evicted||[]).slice(-1)[0]; base.evictedId=id||null; }
+    if (entry.type === "eviction") { const id=(state.evicted||[]).slice(-1)[0]; base.evictedId=id||null; base.voteCounts=entry.voteCounts || null; base.evictedVoteCount=entry.evictedVoteCount ?? null; base.stayVoteCount=entry.stayVoteCount ?? null; }
     if (entry.type === "final3-part1" || entry.type === "final3-part2" || entry.type === "final3-part3") base.participants = living(state).map(h=>h.id);
     if (entry.type === "final-decision") { base.hohId=state.currentHOH; base.thirdPlaceId=(state.evicted||[]).slice(-1)[0] || null; base.finalistIds=living(state).map(h=>h.id); }
     if (entry.type === "jury-vote") { base.votes=(state._juryVotes||[]).map(v=>({voterId:v.voterId,targetId:v.targetId})); base.voterIds=base.votes.map(v=>v.voterId); base.finalistIds=living(state).map(h=>h.id); }
@@ -299,6 +303,26 @@
       runHighRollerRoom(state, config, week);
     }
 
+    // --- Intended target / backdoor planning ---
+    function bondFor(a, b) {
+      const r = state.relationships?.[a.id]?.[b.id] || {friendship:50,trust:50,loyalty:50,rivalry:0,respect:50,attraction:0};
+      return (r.friendship||0)*0.30 + (r.trust||0)*0.25 + (r.loyalty||0)*0.15 + (r.respect||0)*0.20 + (r.attraction||0)*0.10 - (r.rivalry||0)*0.35;
+    }
+    function targetPlan(hoh, nomineeList, eligibleList) {
+      const ranked = nomineeList.map(h => ({h, score: bondFor(hoh,h)})).sort((a,b)=>a.score-b.score);
+      if (!ranked.length) return {text:null, primary:null, alternates:[]};
+      const primary = ranked[0].h;
+      const second = ranked[1]?.h || null;
+      const close = second && Math.abs(ranked[1].score-ranked[0].score) <= 10;
+      const alternates = close ? [primary.id, second.id] : [primary.id];
+      const text = close ? `${displayName(primary)} OR ${displayName(second)}` : displayName(primary);
+      const backdoorRanked = eligibleList
+        .filter(h => !nomineeList.some(n=>n.id===h.id) && h.id!==hoh.id)
+        .map(h=>({h,score:bondFor(hoh,h)})).sort((a,b)=>a.score-b.score);
+      const backdoor = backdoorRanked[0]?.h || null;
+      return {text, primary, alternates, backdoor};
+    }
+
     // --- Nominations ---
     const eligible = living(state).filter(h => h.id !== hoh.id && !h.safe);
     const nomineeCount = Math.min(2, eligible.length);
@@ -306,8 +330,21 @@
     nominees.forEach(n => (n.nominated = true));
     state.nominees = nominees.map(n => n.id);
 
+    const initialPlan = targetPlan(hoh, nominees, eligible);
+    state.intendedTarget = initialPlan.text;
+    state.backdoorTargetId = initialPlan.backdoor ? initialPlan.backdoor.id : null;
+    state.targetHistory = [{ text: initialPlan.text, reason: "Initial target" }];
+    // Occasionally the HOH changes their mind before the POV, mirroring the
+    // fluid target histories shown on Big Brother season wikis.
+    if (nominees.length > 1 && Math.random() < 0.12) {
+      const changed = nominees[1];
+      state.intendedTarget = displayName(changed);
+      state.targetHistory.push({ text: state.intendedTarget, reason: "HOH changes their mind" });
+    }
+
     log(state, {
       week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "nominations",
+      intendedTarget: state.intendedTarget, backdoorTargetId: state.backdoorTargetId, targetHistory: state.targetHistory,
       title: "Nomination Ceremony",
       lines: [`${displayName(hoh)} nominates ${nominees.map(displayName).join(" and ")} for eviction.`]
     });
@@ -339,6 +376,16 @@
           title: "Replacement Nominee",
           lines: [`${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee.`]
         });
+      }
+    }
+
+    // Re-evaluate the target plan after any pre-veto nomination change.
+    if (nominees.length) {
+      const currentPlan = targetPlan(hoh, nominees, living(state));
+      if (!state.targetHistory.length || currentPlan.text !== state.intendedTarget) {
+        state.intendedTarget = currentPlan.text;
+        state.backdoorTargetId = currentPlan.backdoor ? currentPlan.backdoor.id : null;
+        state.targetHistory.push({ text: currentPlan.text, reason: "Target changed after nominations" });
       }
     }
 
@@ -399,10 +446,17 @@
         state.nominees = nominees.map(n => n.id);
       }
 
+      const savedWasTarget = state.intendedTarget && state.intendedTarget.split(" OR ").includes(displayName(savedHg));
+      if (replacement && savedWasTarget) {
+        state.intendedTarget = state.intendedTarget ? `${state.intendedTarget} THEN ${displayName(replacement)}` : displayName(replacement);
+        state.targetHistory.push({ text: state.intendedTarget, reason: `${displayName(savedHg)} was saved with the Power of Veto` });
+        state.backdoorTargetId = replacement.id;
+      }
       log(state, {
         week, phase: "standard", type: "veto-ceremony", hohId: hoh.id,
         winnerId: saved.holder.id, vetoUsed: true, savedId: saved.savedId,
         replacementId: replacement ? replacement.id : null,
+        intendedTarget: state.intendedTarget, backdoorTargetId: state.backdoorTargetId, targetHistory: state.targetHistory,
         title: "Veto Ceremony — Used",
         lines: [
           `${displayName(saved.holder)} uses the Power of Veto on ${displayName(savedHg)}.`,
@@ -412,7 +466,7 @@
     } else {
       log(state, {
         week, phase: "standard", type: "veto-ceremony", hohId: hoh.id,
-        winnerId: vetoWinner.id, vetoUsed: false,
+        winnerId: vetoWinner.id, vetoUsed: false, intendedTarget: state.intendedTarget, backdoorTargetId: state.backdoorTargetId, targetHistory: state.targetHistory,
         title: "Veto Ceremony — Not Used",
         lines: [`${displayName(vetoWinner)} does not use the Power of Veto. Nominations remain the same.`]
       });
@@ -475,9 +529,11 @@
 
     log(state, {
       week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "eviction",
+      voteCounts: { [evictedId]: votesToEvict[evictedId], [stays.id]: votesToEvict[stays.id] },
+      evictedVoteCount: votesToEvict[evictedId], stayVoteCount: votesToEvict[stays.id],
       title: "Eviction",
       lines: [
-        `By a vote of ${votesToEvict[evictedId]}-${votesToEvict[stays.id]}, ${displayName(evicted)} is evicted from the Big Brother house.`,
+        `By a vote of ${votesToEvict[evictedId]} to ${votesToEvict[stays.id]}, ${displayName(evicted)}, you have been evicted.`,
         evicted.juryMember ? `${displayName(evicted)} will join the jury.` : `${displayName(evicted)}'s journey ends here — finishing in ${ordinal(evicted.placement)} place.`
       ]
     });
