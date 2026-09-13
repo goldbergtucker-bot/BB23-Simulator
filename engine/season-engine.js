@@ -46,7 +46,8 @@
     d.participants=ids(e.participants||d.participants);d.nomineeIds=ids(e.nomineeIds||d.nomineeIds||s.nominees);d.povPlayers=ids(e.povPlayers||d.povPlayers||s.povPlayers);
     d.winnerId=e.winnerId||d.winnerId||null;d.hohId=e.hohId||d.hohId||s.currentHOH||null;d.evictedId=e.evictedId||d.evictedId||null;
     if(e.type==="teams")d.teams=JSON.parse(JSON.stringify(s.teams));
-    if(e.type==="eviction-voting")d.votes=(s.evictionVotes||[]).map(v=>({...v})),d.voterIds=d.votes.map(v=>v.voterId);
+    if(e.type==="eviction-voting"){d.votes=(e.votes||s.evictionVotes||[]).map(v=>({...v}));d.voterIds=d.votes.map(v=>v.voterId);}
+    if(e.type==="eviction"){d.voteCounts={...(e.voteCounts||{})};d.evictedVoteCount=Number(e.evictedVoteCount||0);d.stayVoteCount=Number(e.stayVoteCount||0);d.nomineeIds=ids(e.nomineeIds||s.nominees);}
     if(e.type==="jury-vote")d.votes=(s._juryVotes||[]).map(v=>({...v})),d.voterIds=d.votes.map(v=>v.voterId),d.finalistIds=living(s).map(h=>h.id);
     if(e.type==="final-decision")d.finalistIds=living(s).map(h=>h.id);
     return d;
@@ -210,9 +211,9 @@
     const reps=[];
     const teamEntries=[];
     eligibleTeams.forEach(t=>{
-      const members=t.memberIds.map(id=>hg(s,id)).filter(p=>p?.active); const ms=members.filter(p=>!p.safe); const candidates=ms.length?ms:members;
-      if(!candidates.length)return;
-      const rep=candidates.reduce((a,b)=>
+      const ms=t.memberIds.map(id=>hg(s,id)).filter(p=>p?.active&&!p.safe);
+      if(!ms.length)return;
+      const rep=ms.reduce((a,b)=>
         (b.ratings.general+b.ratings.social)>(a.ratings.general+a.ratings.social)?b:a
       );
       reps.push(rep);
