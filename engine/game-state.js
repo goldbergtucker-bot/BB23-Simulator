@@ -36,6 +36,8 @@
       lastName: "",
       portraitUrl: "",
       teamId: null,
+      gender: "",
+      teamCaptain: false,
       ratings: emptyRatings(),
       relationships: emptyRelationships(),
       allianceIds: [],
@@ -112,6 +114,8 @@
 
       bbBucks: {},
       powers: [],
+      coinState: null,
+      _bucksAwarded: false,
 
       history: [],
       currentEventIndex: -1,
