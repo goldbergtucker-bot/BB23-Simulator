@@ -8,9 +8,9 @@
  *   - separate Teams and Alliances
  */
 (() => {
-  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV14";
-  const LEGACY_STORAGE_KEYS = ["bb23CustomSimulatorBrantsteeleV13","bb23CustomSimulatorBrantsteeleV12","bb23CustomSimulatorBrantsteeleV11","bb23CustomSimulatorBrantsteeleV10","bb23CustomSimulatorBrantsteeleV9","bb23CustomSimulatorBrantsteeleV8","bb23CustomSimulatorBrantsteeleV7"];
-  const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV14Index";
+  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV16";
+  const LEGACY_STORAGE_KEYS = ["bb23CustomSimulatorBrantsteeleV14","bb23CustomSimulatorBrantsteeleV13","bb23CustomSimulatorBrantsteeleV12","bb23CustomSimulatorBrantsteeleV11","bb23CustomSimulatorBrantsteeleV10","bb23CustomSimulatorBrantsteeleV9","bb23CustomSimulatorBrantsteeleV8","bb23CustomSimulatorBrantsteeleV7"];
+  const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV16Index";
   let state = GameState.createInitialState(BB23_CONFIG);
   let history = [];
   let pointer = -1;
@@ -85,6 +85,26 @@
     // beneath the card, rather than the full POV field.
     let body = competitionCard(entry);
     if (["nominations","pov-players","veto-ceremony"].includes(entry.type)) body += targetPanel(d, view);
+    if (entry.type === "teams" || entry.type === "team-draft") {
+      const teams = d.teams || view?.teams || [];
+      if (entry.type === "teams") {
+        body += `<div class="teams-sim-grid">${teams.map(t=>`<section class="team-sim-card"><h3>${esc(t.name)}</h3><div class="team-sim-captain">${t.captainId?playerCard(byId(view,t.captainId),"TEAM CAPTAIN"):""}</div><div class="team-sim-members">${(t.memberIds||[]).map(id=>playerCard(byId(view,id),id===t.captainId?"CAPTAIN":"TEAMMATE")).join("")}</div></section>`).join("")}</div>`;
+      } else {
+        const cap=byId(view,d.winnerId);
+        body += `<div class="hero-players">${cap?playerCard(cap,"TEAM CAPTAIN"):""}</div>`;
+      }
+      return body;
+    }
+    if (["bb-bucks","veto-derby","chopping-block-roulette","coin-of-destiny","coin-renomination"].includes(entry.type)) {
+      const winner=byId(view,d.winnerId);
+      if (entry.type === "bb-bucks") {
+        const rows=(d.participants||[]).map((id,i)=>{const h=byId(view,id);const award=i<3?100:i<6?75:50;return `<div class="bucks-row">${portrait(h,"vote-portrait")}<strong>${esc(name(h))}</strong><span>+${award} BB Bucks</span></div>`}).join("");
+        body += `<div class="bucks-list">${rows}</div>`;
+      } else if (winner) {
+        body += `<div class="hero-players">${playerCard(winner, entry.type==="coin-destiny"?"COIN HOLDER":"POWER WINNER")}</div>`;
+      }
+      return body;
+    }
     if (entry.type === "eviction-voting") {
       const votes = d.votes || view?.evictionVotes || [];
       body += `<div class="vote-list">${votes.map(v=>{const voter=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(voter,"vote-portrait")}<strong>${esc(name(voter))}</strong></div><div class="vote-arrow">VOTES TO EVICT</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(name(target))}</strong></div></div>`}).join("")}</div>`;
@@ -234,7 +254,7 @@
 
   function ratingControl(h,k){return `<label><span class="rating-label"><span>${esc(k)}</span><b>${h.ratings[k]}</b></span><input type="range" min="0" max="100" value="${h.ratings[k]}" data-id="${h.id}" data-rating="${k}"></label>`;}
   function renderCast(){
-    castGrid.innerHTML=state.houseguests.map(h=>`<article class="cast-card"><div class="setup-portrait">${portrait(h,"setup-img")}</div><div class="cast-body"><div class="cast-number">HOUSEGUEST ${String(h.slot).padStart(2,"0")}</div><div class="cast-name">${esc(name(h))}</div><label>First Name<input data-id="${h.id}" data-field="firstName" value="${esc(h.firstName)}"></label><label>Last Name<input data-id="${h.id}" data-field="lastName" value="${esc(h.lastName)}"></label><label>Portrait URL<input data-id="${h.id}" data-field="portraitUrl" value="${esc(h.portraitUrl)}" placeholder="https://..."></label><div class="portrait-tools"><label class="upload-portrait">Upload Picture<input type="file" accept="image/*" data-id="${h.id}" data-portrait-upload></label>${h.portraitUrl?`<button type="button" class="clear-portrait" data-clear-portrait="${h.id}">Remove Picture</button>`:""}</div><small class="portrait-help">Use a URL or upload a JPG, PNG, WEBP, or GIF. Uploaded pictures are saved with the cast.</small><div class="rating-grid">${BB23_CONFIG.ratingKeys.map(k=>ratingControl(h,k)).join("")}</div></div></article>`).join("");
+    castGrid.innerHTML=state.houseguests.map(h=>`<article class="cast-card"><div class="setup-portrait">${portrait(h,"setup-img")}</div><div class="cast-body"><div class="cast-number">HOUSEGUEST ${String(h.slot).padStart(2,"0")}</div><div class="cast-name">${esc(name(h))}</div><label>First Name<input data-id="${h.id}" data-field="firstName" value="${esc(h.firstName)}"></label><label>Last Name<input data-id="${h.id}" data-field="lastName" value="${esc(h.lastName)}"></label><label>Gender<select data-id="${h.id}" data-field="gender"><option value="" ${!h.gender?"selected":""}>Not specified</option><option value="male" ${h.gender==="male"?"selected":""}>Male</option><option value="female" ${h.gender==="female"?"selected":""}>Female</option></select></label><label>Portrait URL<input data-id="${h.id}" data-field="portraitUrl" value="${esc(h.portraitUrl)}" placeholder="https://..."></label><div class="portrait-tools"><label class="upload-portrait">Upload Picture<input type="file" accept="image/*" data-id="${h.id}" data-portrait-upload></label>${h.portraitUrl?`<button type="button" class="clear-portrait" data-clear-portrait="${h.id}">Remove Picture</button>`:""}</div><small class="portrait-help">Use a URL or upload a JPG, PNG, WEBP, or GIF. Uploaded pictures are saved with the cast.</small><div class="rating-grid">${BB23_CONFIG.ratingKeys.map(k=>ratingControl(h,k)).join("")}</div></div></article>`).join("");
   }
   function renderTeams(){teamsGrid.innerHTML=state.teams.map(t=>`<div class="team"><h3>${esc(t.name)}</h3><div class="team-list">${t.memberIds.map(id=>byId(null,id)).filter(Boolean).map(h=>`<div class="team-player">${portrait(h,"mini-portrait")}${esc(name(h))}</div>`).join("")}</div></div>`).join("");}
   function teamOptions(){return state.houseguests.map(h=>`<option value="${h.id}">${esc(name(h))}</option>`).join("");}
@@ -324,7 +344,7 @@
   $("seasonName").addEventListener("input",e=>state.season.name=e.target.value);$("themeUrl").addEventListener("input",e=>state.season.themeUrl=e.target.value);$("logoUrl").addEventListener("input",e=>state.season.logoUrl=e.target.value);
   $("loadDemoBtn").onclick=loadDemo;$("resetBtn").onclick=()=>{if(confirm("Reset the entire cast?")){state=GameState.createInitialState(BB23_CONFIG);refreshSetup();}};
   $("saveBtn").onclick=()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));toastMsg("Cast, relationships and alliances saved.");};
-  $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb23-custom-season-v14.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
+  $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb23-custom-season-v16.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
   $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");x.relationships=x.relationships||{};x.alliances=x.alliances||[];x.season=x.season||{};state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
   $("simulateBtn").onclick=startSeason;$("resimulateBtn").onclick=startSeason;$("backToSetupBtn").onclick=resetSetup;
   previousBtn.onclick=previous;nextBtn.onclick=next;revealWeekBtn.onclick=revealWeek;revealSeasonBtn.onclick=()=>revealTo(history.length-1);
