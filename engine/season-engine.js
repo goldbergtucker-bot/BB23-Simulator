@@ -296,7 +296,7 @@
         wc.winner.safe = true;
         individualSafe.push(wc.winner.id);
         log(state, {
-          week, phase: "team", type: "wildcard",
+          week, phase: "team", type: "wildcard", winnerId: wc.winner.id,
           title: `Wildcard Competition — ${wc.label}`,
           competition: wc,
           lines: [`${displayName(wc.winner)} wins the Wildcard and is individually safe this week — a target now sits on their back.`]
