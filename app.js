@@ -148,8 +148,11 @@
     }
     if (entry.type === "eviction") {
       const evicted = byId(view, d.evictedId);
-      const a = Number(d.evictedVoteCount ?? 0);
-      const b = Number(d.stayVoteCount ?? 0);
+      const counts = d.voteCounts || {};
+      const a = Number(d.evictedVoteCount ?? counts[d.evictedId] ?? 0);
+      const nomineeIds = d.nomineeIds || [];
+      const stayId = nomineeIds.find(id => id !== d.evictedId);
+      const b = Number(d.stayVoteCount ?? counts[stayId] ?? 0);
       body += `<div class="eviction-result">${evicted ? playerCard(evicted,"EVICTED") : ""}<div class="eviction-vote-count">By a vote of <strong>${a} to ${b}</strong>, ${esc(name(evicted))}, you have been evicted.</div></div>`;
       return body;
     }
