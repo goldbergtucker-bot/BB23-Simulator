@@ -1,238 +1,39 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Big Brother 23 — Custom Simulator</title>
-    <link rel="stylesheet" href="style.css">
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Big Brother 23 — Custom Simulator</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
-<header class="site-header">
-    <div class="brand">
-        <h1>BIG BROTHER 23</h1>
-        <p>Custom BrantSteele-Style Simulator</p>
-    </div>
-
-    <nav class="main-nav">
-        <button type="button" onclick="showPage('setup-page')">SETUP</button>
-        <button type="button" onclick="showPage('simulator-page')">SIMULATOR</button>
-        <button type="button" onclick="showPage('results-page')">RESULTS</button>
-    </nav>
-</header>
-
+<div class="app-shell">
+<header class="topbar"><div class="brand"><div class="brand-mark">BB</div><div><b>BIG BROTHER</b><span>23 · CUSTOM SIMULATOR</span></div></div><div class="top-actions"><button id="backToSetupBtn" class="ghost">Cast Setup</button></div></header>
 <main>
+<section id="setupView">
+  <div class="setup-hero"><div><span class="eyebrow">CUSTOM BRANTSTEELE-STYLE SIMULATOR · V16</span><h1>Build Your BB23 Season</h1><p>Build your custom cast, portraits, ratings, relationships and alliances — then run the full BB23 season one event at a time.</p></div><div class="hero-actions"><button id="loadDemoBtn">Load Demo Cast</button><button id="simulateBtn" class="primary">Simulate Season</button></div></div>
+  <section class="settings-panel"><h2>Season Settings</h2><div class="settings-grid"><label>Season Name<input id="seasonName"></label><label>Theme URL<input id="themeUrl" placeholder="https://..."></label><label>Logo URL<input id="logoUrl" placeholder="https://..."></label></div></section>
+  <div class="section-heading"><div><h2>Houseguests</h2><p>16 custom players · portraits · five ratings</p></div><div class="tools"><span id="validity">Cast ready</span><button id="saveBtn">Save</button><button id="exportBtn">Export</button><label class="import">Import<input id="importInput" type="file" accept="application/json"></label><button id="resetBtn" class="danger">Reset</button></div></div>
+  <div id="castGrid" class="cast-grid"></div>
+  <section class="section-heading"><div><h2>BB23 Teams</h2><p>Teams are separate from alliances and follow the BB23 opening format.</p></div></section><div id="teamsGrid" class="teams-grid"></div>
 
-<section id="setup-page" class="page active-page">
+  <section class="section-heading"><div><h2>Starting Relationships</h2><p>Set friendship, trust, loyalty, rivalry, respect and attraction before the simulation.</p></div></section><section class="setup-social-panel"><div id="relationshipsGrid"></div></section>
 
-    <div class="page-header">
-        <h2>Season Setup</h2>
-        <p>Create your custom Big Brother season.</p>
-    </div>
+  <section class="section-heading"><div><h2>Custom Alliances</h2><p>Create alliances that exist from the start of the season. Multiple overlapping alliances are supported.</p></div></section><section class="setup-social-panel"><div id="allianceSetup"></div></section>
+</section>
 
-    <div class="setup-grid">
-
-        <section class="panel">
-            <h3>Season Information</h3>
-
-            <label>
-                Season Name
-                <input id="season-name" type="text" value="Big Brother 23">
-            </label>
-
-            <label>
-                Season Year
-                <input id="season-year" type="number" value="2021">
-            </label>
-
-            <label>
-                Season Theme
-                <input id="season-theme" type="text" value="Hotel BB">
-            </label>
-
-            <label>
-                Theme / Logo Image URL
-                <input id="season-logo" type="text" placeholder="https://...">
-            </label>
-
-            <label>
-                Background Image URL
-                <input id="season-background" type="text" placeholder="https://...">
-            </label>
-
-            <label>
-                Number of Houseguests
-                <input id="houseguest-count" type="number" min="2" max="100" value="16">
-            </label>
-
-            <label>
-                Season Length
-                <input id="season-weeks" type="number" min="1" max="30" value="13">
-            </label>
-
-            <button
-                type="button"
-                class="primary-button"
-                onclick="createNewSeason()">
-                CREATE SEASON
-            </button>
-        </section>
-
-
-        <section class="panel">
-            <h3>Houseguests</h3>
-
-            <div id="houseguest-editor"></div>
-
-            <button
-                type="button"
-                class="secondary-button"
-                onclick="addHouseguest()">
-                + ADD HOUSEGUEST
-            </button>
-        </section>
-
-    </div>
-
-
-    <section class="panel advanced-panel">
-        <h3>Twists & Powers</h3>
-
-        <div id="twist-editor"></div>
-
-        <div class="advanced-card-actions">
-            <button
-                id="save-twist-btn"
-                type="button"
-                class="secondary-button">
-                SAVE TWIST
-            </button>
-
-            <button
-                id="cancel-twist-btn"
-                type="button"
-                class="secondary-button">
-                CANCEL
-            </button>
-        </div>
-
-        <div id="twist-list"></div>
+<section id="seasonView" class="hidden">
+  <div class="season-header"><div><span class="eyebrow">SIMULATION</span><h1 id="seasonHeading">Big Brother 23</h1><p id="seasonStatusLine">READY</p></div><div class="season-controls"><button id="resimulateBtn">↻ Simulate Again</button><button id="revealWeekBtn">Reveal Week</button><button id="revealSeasonBtn" class="primary">Reveal Season</button></div></div>
+  <div class="sim-layout">
+    <aside class="left-rail"><div class="rail-title">EVENTS</div><div id="timeline"></div></aside>
+    <section class="main-stage">
+      <article id="eventPanel" class="event-panel"><div class="event-meta"><span id="eventKicker">READY TO SIMULATE</span><span id="eventCounter">0 / 0</span></div><h2 id="eventTitle">Your season is ready</h2><div id="eventBody"></div></article>
+      <div class="navigator"><button id="previousBtn">← Previous</button><button id="nextBtn" class="primary">Next →</button></div>
+      <nav class="view-tabs"><button data-tab="event" class="active">Current Event</button><button data-tab="stats">Season Results</button><button data-tab="alliances">Alliances</button></nav>
+      <div id="tabContent" class="tab-content hidden"></div>
     </section>
-
-
-    <section class="panel">
-        <h3>Saved Seasons</h3>
-
-        <div id="saved-seasons-list"></div>
-
-        <div class="button-row">
-            <button
-                type="button"
-                class="secondary-button"
-                onclick="saveCurrentSeason()">
-                SAVE SEASON
-            </button>
-
-            <button
-                type="button"
-                class="secondary-button"
-                onclick="openSavedSeason()">
-                OPEN SEASON
-            </button>
-        </div>
-    </section>
-
+    <aside class="right-rail"><div class="rail-title">MEMORY WALL</div><div id="memoryWall"></div></aside>
+  </div>
 </section>
-
-
-<section id="simulator-page" class="page">
-
-    <div class="page-header">
-        <h2 id="simulator-title">Simulation</h2>
-
-        <div class="simulator-controls">
-            <button
-                type="button"
-                class="secondary-button"
-                onclick="returnToSetup()">
-                BACK TO SETUP
-            </button>
-
-            <button
-                type="button"
-                class="primary-button"
-                onclick="runNextEvent()">
-                NEXT EVENT
-            </button>
-        </div>
-    </div>
-
-
-    <div id="simulator-status" class="status-grid"></div>
-
-
-    <div class="simulation-layout">
-
-        <aside class="simulation-sidebar">
-
-            <section class="panel">
-                <h3>Weeks</h3>
-                <div id="simulation-week-navigation"></div>
-            </section>
-
-            <section class="panel">
-                <h3>Memory Wall</h3>
-                <div id="memory-wall-mini"></div>
-            </section>
-
-        </aside>
-
-
-        <section class="simulation-main">
-
-            <div id="game-chain" class="game-chain"></div>
-
-            <div id="event-display" class="event-display">
-                <div class="empty-state">
-                    Press <strong>NEXT EVENT</strong> to begin.
-                </div>
-            </div>
-
-        </section>
-
-    </div>
-
-</section>
-
-
-<section id="results-page" class="page">
-
-    <div class="page-header results-header">
-        <div>
-            <h2>Season Results</h2>
-            <p id="results-season-name"></p>
-        </div>
-    </div>
-
-    <div id="results-content"></div>
-
-</section>
-
-</main>
-
-
-<footer class="site-footer">
-    <p>Big Brother 23 Custom Simulator</p>
-</footer>
-
-
-<script src="data/bb23-config.js"></script>
-<script src="engine/competitions.js"></script>
-<script src="engine/game-state.js"></script>
-<script src="engine/relationships.js"></script>
-<script src="engine/season-engine.js"></script>
-<script src="app.js"></script>
-
-</body>
-</html>
+</main><div id="toast" class="toast"></div>
+<script src="data/bb23-config.js"></script><script src="engine/game-state.js"></script><script src="engine/competitions.js"></script><script src="engine/relationships.js"></script><script src="engine/season-engine.js"></script><script src="app.js"></script>
+</div></body></html>
