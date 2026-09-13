@@ -39,29 +39,8 @@
     };
   }
 
-  function competitionInfo(entry) {
-    const cfg = window.BB23_CONFIG?.competitionSchedule || [];
-    let type = entry.competitionType || null;
-    if (!type) {
-      if (entry.type === "hoh") type = "hoh";
-      else if (entry.type === "veto") type = entry.week === 9 && entry.title?.includes("Logo") ? "pov-de" : entry.week === 10 && entry.title?.includes("What") ? "pov-de" : "pov";
-      else if (entry.type === "wildcard") type = "wildcard";
-      else if (entry.type === "final3-part1") type = "final-hoh-1";
-      else if (entry.type === "final3-part2") type = "final-hoh-2";
-      else if (entry.type === "final3-part3") type = "final-hoh-3";
-    }
-    if (!type) return null;
-    const exact = cfg.find(c => c.week === entry.week && c.type === type);
-    return exact ? { name: exact.name, description: exact.description, type: exact.type } : null;
-  }
-
   function log(state, entry) {
     const record = Object.assign({ id: state.history.length + 1 }, entry);
-    const comp = competitionInfo(record);
-    if (comp) {
-      record.competitionName = comp.name;
-      record.competitionDescription = comp.description;
-    }
     record.snapshot = viewSnapshot(state);
     record.data = buildEventData(state, record);
     state.history.push(record);
@@ -69,7 +48,7 @@
 
   function buildEventData(state, entry) {
     const ids = a => Array.isArray(a) ? a.slice() : [];
-    const base = { participants: [], nomineeIds: ids(state.nominees), povPlayers: ids(state.povPlayers), winnerId: entry.winnerId || null, hohId: entry.hohId || state.currentHOH || null, evictedId: entry.evictedId || null, competitionName: entry.competitionName || null, competitionDescription: entry.competitionDescription || null };
+    const base = { competition: entry.competition ? JSON.parse(JSON.stringify(entry.competition)) : null, participants: [], nomineeIds: ids(state.nominees), povPlayers: ids(state.povPlayers), winnerId: entry.winnerId || null, hohId: entry.hohId || state.currentHOH || null, evictedId: entry.evictedId || null };
     if (entry.type === "hoh") { base.winnerId = entry.winnerId || state.currentHOH || null; base.participants = living(state).map(h => h.id); }
     if (entry.type === "wildcard") base.winnerId = (state.history.length && state.history[state.history.length-1]?.winnerId) || null;
     if (entry.type === "veto") { base.winnerId = entry.winnerId || state.vetoWinners?.[0] || null; base.participants = ids(state.povPlayers); }
@@ -113,7 +92,7 @@
   }
 
   function randomizeStartingRelationships(state) {
-    if (state.season.relationshipsRandomized) return;
+    if (state.season.relationshipsRandomized || state.season.relationshipsCustomized) return;
     const ids = state.houseguests.map(h => h.id);
     ids.forEach(a => {
       ids.forEach(b => {
@@ -171,8 +150,8 @@
     log(state, {
       week: 1, phase: "premiere", type: "hoh", winnerId: hohWinner.id,
       title: `Premiere HOH — ${hohComp.label}`,
-      competitionType: "hoh",
-      lines: [`${displayName(hohWinner)} wins the first Head of Household competition, ${hohComp.label}.`]
+      competition: hohComp,
+      lines: [`${displayName(hohWinner)} wins the first Head of Household competition (${hohComp.category}).`]
     });
 
     // Double or Nothing twist
@@ -230,7 +209,7 @@
     state.week = week;
     clearWeeklyFlags(state);
     const teamPhase = week <= config.teamWeeks;
-    const highRollerPhase = week >= (config.highRollerStartWeek || 6) && week < (config.highRollerStartWeek || 6) + config.highRollerWeeks;
+    const highRollerPhase = week >= (config.highRollerStartWeek || 6) && week <= (config.highRollerEndWeek || 8);
 
     // --- HOH ---
     let hoh;
@@ -253,8 +232,8 @@
       log(state, {
         week, phase: teamPhase ? "team" : highRollerPhase ? "high-roller" : "standard", type: "hoh",
         title: `Head of Household — ${comp.label}`,
-        competitionType: "hoh",
-        lines: [`${displayName(hoh)} wins HOH (${comp.label}).`]
+        competition: comp,
+        lines: [`${displayName(hoh)} wins HOH (${comp.category}).`]
       });
     }
 
@@ -290,14 +269,14 @@
         log(state, {
           week, phase: "team", type: "wildcard",
           title: `Wildcard Competition — ${wc.label}`,
-          competitionType: "wildcard",
+          competition: wc,
           lines: [`${displayName(wc.winner)} wins the Wildcard and is individually safe this week — a target now sits on their back.`]
         });
       }
     }
 
     if (highRollerPhase) {
-      runHighRollerRoom(state, week);
+      runHighRollerRoom(state, config, week);
     }
 
     // --- Nominations ---
@@ -355,7 +334,7 @@
     log(state, {
       week, phase: "standard", type: "veto", winnerId: vetoWinner.id,
       title: `Power of Veto — ${povComp.label}`,
-      competitionType: (week === 9 ? "pov" : week === 10 ? "pov" : "pov"),
+      competition: povComp,
       lines: [`${displayName(vetoWinner)} wins the Power of Veto (${povComp.category}).`]
     });
 
@@ -490,12 +469,12 @@
   // ---------------------------------------------------------------------
 
   const HIGH_ROLLER_GAMES = [
-    { week:6, type:"bonusVeto", name:"Veto Derby", cost:50, winChance:0.5 },
-    { week:7, type:"selfRemoval", name:"Chopping Block Roulette", cost:125, winChance:0.45 },
-    { week:8, type:"voteFlip", name:"Coin of Destiny", cost:250, winChance:0.35 }
+    { type: "bonusVeto", name: "Veto Derby", cost: 50, winChance: 0.5 },
+    { type: "selfRemoval", name: "Block Buster", cost: 100, winChance: 0.4 },
+    { type: "voteFlip", name: "Power Shift", cost: 150, winChance: 0.25 }
   ];
 
-  function runHighRollerRoom(state, week) {
+  function runHighRollerRoom(state, config, week) {
     const players = living(state);
     const ranked = players.map(hg => ({
       hg, score: (hg.ratings.social * 0.6 + hg.ratings.general * 0.4) + Math.random() * 20
@@ -513,12 +492,16 @@
     });
 
     const plays = [];
+    const configuredGames = config.highRollerGames || [];
     players.forEach(hg => {
       const bucks = state.bbBucks[hg.id] || 0;
-      const game = HIGH_ROLLER_GAMES.find(g => g.week === week);
-      if (!game || game.cost > bucks) return;
+      const weekGame = configuredGames.find(g => g.week === week);
+      const gamePool = weekGame ? [{...weekGame, winChance: weekGame.winChance ?? 0.35}] : HIGH_ROLLER_GAMES;
+      const affordable = gamePool.filter(g => g.cost <= bucks);
+      if (!affordable.length) return;
       const willPlay = Math.random() < clamp(0.25 + hg.ratings.strategic / 200, 0.15, 0.7);
       if (!willPlay) return;
+      const game = affordable[Math.floor(Math.random() * affordable.length)];
       state.bbBucks[hg.id] -= game.cost;
       const won = Math.random() < game.winChance;
       if (won) {
@@ -531,12 +514,11 @@
     });
 
     if (plays.length) {
+      const official = (config.highRollerGames || []).find(g => g.week === week) || (config.competitionSchedule || []).find(c => c.week === week && c.type === "high-roller");
       log(state, {
         week, phase: "high-roller", type: "high-roller-room",
-        competitionType: "high-roller",
-        competitionName: HIGH_ROLLER_GAMES.find(g => g.week === week)?.name || "High Roller's Room",
-        competitionDescription: (window.BB23_CONFIG?.competitionSchedule || []).find(c => c.week === week && c.type === "high-roller")?.description || "A BB23 High Roller's Room competition for a special power.",
-        title: `High Roller's Room — ${HIGH_ROLLER_GAMES.find(g => g.week === week)?.name || "Competition"}`,
+        title: official ? `High Roller's Room — ${official.name}` : "The High Roller's Room",
+        competition: official ? {name: official.name, label: official.name, description: official.description, category: official.category || "strategic", official: true, week} : null,
         lines: plays
       });
     }
@@ -562,13 +544,13 @@
     log(state, {
       week: "Final", phase: "finale", type: "final3-part1", winnerId: part1Winner.id,
       title: `Final 3 — Part 1 (${part1.label})`,
-      competitionType: "final-hoh-1",
+      competition: part1,
       lines: [`${displayName(part1Winner)} wins Part 1 and advances directly to Part 3.`]
     });
     log(state, {
       week: "Final", phase: "finale", type: "final3-part2", winnerId: part2Winner.id,
       title: `Final 3 — Part 2 (${part2.label})`,
-      competitionType: "final-hoh-2",
+      competition: part2,
       lines: [`${displayName(part2Winner)} defeats ${displayName(part2Loser)} to advance to Part 3.`]
     });
 
@@ -579,7 +561,7 @@
     log(state, {
       week: "Final", phase: "finale", type: "final3-part3", winnerId: finalHoh.id,
       title: `Final 3 — Part 3: Final HOH (${part3.label})`,
-      competitionType: "final-hoh-3",
+      competition: part3,
       lines: [`${displayName(finalHoh)} wins the final Head of Household and controls the final decision.`]
     });
 
@@ -663,6 +645,12 @@
     state.secretHOH = null;
     state.dethronedHOH = null;
     state.finale = null;
+    // Keep only user-created alliances when resimulating; generated alliances belong to the prior run.
+    const customAlliances = (state.alliances || []).filter(a => a.custom).map(a => JSON.parse(JSON.stringify(a)));
+    state.alliances = customAlliances;
+    state.houseguests.forEach(h => { h.allianceIds = []; });
+    state.alliances.forEach(a => a.memberIds.forEach(id => { const hg = state.houseguests.find(x => x.id === id); if (hg) hg.allianceIds.push(a.id); }));
+    state.season.relationshipsRandomized = false;
     state.week = 0;
     state.phase = "premiere";
     state.houseguests.forEach(h => {
