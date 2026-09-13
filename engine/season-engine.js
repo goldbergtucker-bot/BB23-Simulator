@@ -51,7 +51,17 @@
     const base = { competition: entry.competition ? JSON.parse(JSON.stringify(entry.competition)) : null, participants: [], nomineeIds: ids(state.nominees), povPlayers: ids(state.povPlayers), winnerId: entry.winnerId || null, hohId: entry.hohId || state.currentHOH || null, evictedId: entry.evictedId || null };
     if (entry.type === "hoh") { base.winnerId = entry.winnerId || state.currentHOH || null; base.participants = living(state).map(h => h.id); }
     if (entry.type === "wildcard") base.winnerId = (state.history.length && state.history[state.history.length-1]?.winnerId) || null;
-    if (entry.type === "veto") { base.winnerId = entry.winnerId || state.vetoWinners?.[0] || null; base.participants = ids(state.povPlayers); }
+    if (entry.type === "veto") { base.winnerId = entry.winnerId || state.vetoWinners?.[0] || null; base.participants = []; }
+    if (entry.type === "veto-ceremony") {
+      base.hohId = entry.hohId || state.currentHOH || null;
+      base.winnerId = entry.winnerId || state.vetoWinners?.[0] || null;
+      base.nomineeIds = ids(state.nominees);
+      base.finalNomineeIds = ids(state.nominees);
+      base.vetoUsed = !!entry.vetoUsed;
+      base.savedId = entry.savedId || null;
+      base.replacementId = entry.replacementId || null;
+      base.participants = [base.hohId, base.winnerId, ...base.nomineeIds].filter(Boolean);
+    }
     if (entry.type === "pov-players") {
       base.povPlayers = ids(state.povPlayers);
       base.participants = ids(state.povPlayers);
@@ -372,33 +382,39 @@
       }
     }
 
+    let replacement = null;
     if (saved) {
       const savedHg = nominees.find(n => n.id === saved.savedId);
-      savedHg.nominated = false;
-      nominees = nominees.filter(n => n.id !== saved.savedId);
-      log(state, {
-        week, phase: "standard", type: "veto-ceremony",
-        title: "Veto Ceremony — Used",
-        lines: [`${displayName(saved.holder)} uses the Power of Veto on ${displayName(savedHg)}.`]
-      });
-      const replacementPool = living(state).filter(h => h.id !== hoh.id && !h.safe && !nominees.includes(h) && h.id !== savedHg.id);
-      const replacement = R().pickReplacement(state, hoh, replacementPool, nominees.map(n => n.id));
+      if (savedHg) {
+        savedHg.nominated = false;
+        nominees = nominees.filter(n => n.id !== saved.savedId);
+        state.nominees = nominees.map(n => n.id);
+      }
+
+      const replacementPool = living(state).filter(h => h.id !== hoh.id && !h.safe && !nominees.includes(h) && h.id !== saved.savedId);
+      replacement = R().pickReplacement(state, hoh, replacementPool, nominees.map(n => n.id));
       if (replacement) {
         replacement.nominated = true;
         nominees.push(replacement);
         state.nominees = nominees.map(n => n.id);
-        state.nominees = nominees.map(n => n.id);
-        log(state, {
-          week, phase: "standard", type: "nominations",
-          title: "Replacement Nominee",
-          lines: [`${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee.`]
-        });
       }
+
+      log(state, {
+        week, phase: "standard", type: "veto-ceremony", hohId: hoh.id,
+        winnerId: saved.holder.id, vetoUsed: true, savedId: saved.savedId,
+        replacementId: replacement ? replacement.id : null,
+        title: "Veto Ceremony — Used",
+        lines: [
+          `${displayName(saved.holder)} uses the Power of Veto on ${displayName(savedHg)}.`,
+          replacement ? `${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee.` : `${displayName(hoh)} does not name a replacement nominee.`
+        ]
+      });
     } else {
       log(state, {
-        week, phase: "standard", type: "veto-ceremony",
+        week, phase: "standard", type: "veto-ceremony", hohId: hoh.id,
+        winnerId: vetoWinner.id, vetoUsed: false,
         title: "Veto Ceremony — Not Used",
-        lines: [`The Power of Veto is not used. Nominations remain the same.`]
+        lines: [`${displayName(vetoWinner)} does not use the Power of Veto. Nominations remain the same.`]
       });
     }
 
