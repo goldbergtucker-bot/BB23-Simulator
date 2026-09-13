@@ -8,9 +8,9 @@
  *   - separate Teams and Alliances
  */
 (() => {
-  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV12";
-  const LEGACY_STORAGE_KEYS = ["bb23CustomSimulatorBrantsteeleV11","bb23CustomSimulatorBrantsteeleV10","bb23CustomSimulatorBrantsteeleV9","bb23CustomSimulatorBrantsteeleV8","bb23CustomSimulatorBrantsteeleV7"];
-  const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV12Index";
+  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV14";
+  const LEGACY_STORAGE_KEYS = ["bb23CustomSimulatorBrantsteeleV13","bb23CustomSimulatorBrantsteeleV12","bb23CustomSimulatorBrantsteeleV11","bb23CustomSimulatorBrantsteeleV10","bb23CustomSimulatorBrantsteeleV9","bb23CustomSimulatorBrantsteeleV8","bb23CustomSimulatorBrantsteeleV7"];
+  const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV14Index";
   let state = GameState.createInitialState(BB23_CONFIG);
   let history = [];
   let pointer = -1;
@@ -50,14 +50,21 @@
   }
 
   function competitionCard(entry) {
-    const c = entry.competition;
-    if(!c?.name) return "";
+    // Always resolve the official competition directly from the BB23 schedule
+    // as a fallback. This makes the description independent of which event
+    // renderer created the history record.
+    const c = entry.competition || {};
+    const official = BB23_CONFIG.competitionSchedule?.find(x => Number(x.week) === Number(entry.week) && x.type === entry.type);
+    const nameValue = c.name || c.label || official?.name;
+    if(!nameValue) return "";
+    const description = c.description || official?.description || "";
+    const category = c.category || official?.category || "general";
     const type = entry.type === "veto" ? "POWER OF VETO" : entry.type?.includes("hoh") ? "HEAD OF HOUSEHOLD" : entry.type === "wildcard" ? "WILDCARD" : entry.type?.includes("final-hoh") ? "FINAL HOH" : "COMPETITION";
     return `<section class="competition-card">
       <div class="competition-top"><span class="competition-kicker">${esc(type)}</span><span class="official-badge">REAL BB23 COMPETITION</span></div>
-      <h3>${esc(c.name)}</h3>
-      <div class="competition-meta"><span>${esc((c.category||"general").toUpperCase())}</span>${c.week?`<span>WEEK ${esc(c.week)}</span>`:""}</div>
-      <p>${esc(c.description||"")}</p>
+      <h3>${esc(nameValue)}</h3>
+      <div class="competition-meta"><span>${esc(String(category).toUpperCase())}</span><span>WEEK ${esc(entry.week)}</span></div>
+      <p>${esc(description)}</p>
     </section>`;
   }
 
@@ -143,8 +150,13 @@
         </div>
       </div>`;
     } else if (entry.type === "veto") {
-      const winner = byId(view, d.winnerId);
+      const winnerId = d.winnerId || entry.winnerId || entry.competition?.winner?.id;
+      const winner = byId(view, winnerId);
       if (winner) body += `<div class="hero-players veto-winner-only">${playerCard(winner,"POV WINNER")}</div>`;
+    } else if (entry.type === "wildcard") {
+      const winnerId = d.winnerId || entry.winnerId || entry.competition?.winner?.id;
+      const winner = byId(view, winnerId);
+      if (winner) body += `<div class="hero-players wildcard-winner-only">${playerCard(winner,"WILDCARD WINNER")}</div>`;
     } else if (players.length) {
       // HOH competitions must display every eligible houseguest. Older versions
       // limited the generic event renderer to eight cards, which incorrectly
@@ -312,7 +324,7 @@
   $("seasonName").addEventListener("input",e=>state.season.name=e.target.value);$("themeUrl").addEventListener("input",e=>state.season.themeUrl=e.target.value);$("logoUrl").addEventListener("input",e=>state.season.logoUrl=e.target.value);
   $("loadDemoBtn").onclick=loadDemo;$("resetBtn").onclick=()=>{if(confirm("Reset the entire cast?")){state=GameState.createInitialState(BB23_CONFIG);refreshSetup();}};
   $("saveBtn").onclick=()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));toastMsg("Cast, relationships and alliances saved.");};
-  $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb23-custom-season-v7.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
+  $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb23-custom-season-v14.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
   $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");x.relationships=x.relationships||{};x.alliances=x.alliances||[];x.season=x.season||{};state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
   $("simulateBtn").onclick=startSeason;$("resimulateBtn").onclick=startSeason;$("backToSetupBtn").onclick=resetSetup;
   previousBtn.onclick=previous;nextBtn.onclick=next;revealWeekBtn.onclick=revealWeek;revealSeasonBtn.onclick=()=>revealTo(history.length-1);
