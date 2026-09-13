@@ -65,13 +65,18 @@
 
   /* ----------------------------- TEAMS -------------------------------- */
   function draftTeams(s){
+    // Preserve a complete custom team setup.  The previous version checked
+    // whether the teams were complete and then immediately erased memberIds,
+    // which made valid saved rosters look empty and prevented Team Safety and
+    // Wildcard from running.
     const existing=s.teams.length===4&&s.teams.every(t=>Array.isArray(t.memberIds)&&t.memberIds.length===4&&t.memberIds.every(id=>hg(s,id)));
-    s.teams.forEach((t,i)=>{t.name=TEAM_NAMES[i]||t.name;t.memberIds=[];t.captainId=null;});
     if(existing){
-      s.teams.forEach(t=>{
+      s.teams.forEach((t,i)=>{
+        t.name=TEAM_NAMES[i]||t.name;
         t.memberIds=t.memberIds.slice(0,4);
         const members=t.memberIds.map(id=>hg(s,id)).filter(Boolean);
-        const cap=hg(s,t.captainId)||members.sort((a,b)=>b.ratings.general-a.ratings.general)[0];
+        const cap=hg(s,t.captainId)||members.find(p=>p.teamCaptain)||members.sort((a,b)=>b.ratings.general-a.ratings.general)[0];
+        members.forEach(p=>{p.teamId=t.id;p.teamCaptain=false;});
         if(cap){cap.teamCaptain=true;t.captainId=cap.id;}
       });
       log(s,{week:0,phase:"premiere",type:"teams",title:"Move-In — Custom Team Rosters",participants:s.houseguests.map(h=>h.id),lines:s.teams.map(t=>`${t.name}: ${t.memberIds.map(id=>displayName(hg(s,id))).join(", ")} (Captain: ${displayName(hg(s,t.captainId))})`)});
@@ -182,8 +187,67 @@
     }
   }
 
-  function markTeamSafety(s,hoh,week){if(week>4)return;const t=teamOf(s,hoh);if(!t)return;t.memberIds.forEach(id=>{const p=hg(s,id);if(p?.active)p.safe=true;});log(s,{week,phase:"team",type:"team-safety",hohId:hoh.id,participants:t.memberIds,title:"Team Safety",lines:[`${t.name} are safe from nomination because ${displayName(hoh)} is HOH.`]});}
-  function runWildcard(s,week){if(week>4)return;const hoh=hg(s,s.currentHOH);const teams=s.teams.filter(t=>t.id!==hoh?.teamId);const reps=teams.map(t=>{const ms=t.memberIds.map(id=>hg(s,id)).filter(p=>p?.active&&!p.safe);return ms.length?ms.reduce((a,b)=>(b.ratings.general+b.ratings.social)>(a.ratings.general+a.ratings.social)?b:a):null;}).filter(Boolean);if(reps.length<3)return;const comp=C().runCompetition(reps.slice(0,3),{week,type:"wildcard"});const winner=comp.winner;const accepts=Math.random()<.65;let punishment="";if(accepts){winner.safe=true;punishment=Math.random()<.25?`${displayName(winner)} accepts safety and is forced to choose a consequence for another team.`:`${displayName(winner)} accepts individual safety; their teammates remain vulnerable.`;}else punishment=`${displayName(winner)} declines individual safety.`;log(s,{week,phase:"team",type:"wildcard",winnerId:winner.id,participants:reps.slice(0,3).map(p=>p.id),competition:comp,title:`Wildcard Competition — ${comp.label}`,lines:[`${displayName(winner)} wins the Wildcard.` ,punishment]});}
+  function markTeamSafety(s,hoh,week){
+    if(week>4)return;
+    const t=teamOf(s,hoh);
+    if(!t)return;
+    const safeMembers=t.memberIds.map(id=>hg(s,id)).filter(p=>p?.active);
+    safeMembers.forEach(p=>{p.safe=true;});
+    log(s,{
+      week,phase:"team",type:"team-safety",hohId:hoh.id,
+      participants:safeMembers.map(p=>p.id),
+      teamId:t.id,teamName:t.name,
+      safeMemberIds:safeMembers.map(p=>p.id),
+      title:"Team Safety",
+      lines:[`${t.name} are safe from nomination because ${displayName(hoh)} is HOH.`]
+    });
+  }
+
+  function runWildcard(s,week){
+    if(week>4)return;
+    const hoh=hg(s,s.currentHOH);
+    const eligibleTeams=s.teams.filter(t=>t.id!==hoh?.teamId);
+    const reps=[];
+    const teamEntries=[];
+    eligibleTeams.forEach(t=>{
+      const ms=t.memberIds.map(id=>hg(s,id)).filter(p=>p?.active&&!p.safe);
+      if(!ms.length)return;
+      const rep=ms.reduce((a,b)=>
+        (b.ratings.general+b.ratings.social)>(a.ratings.general+a.ratings.social)?b:a
+      );
+      reps.push(rep);
+      teamEntries.push({teamId:t.id,teamName:t.name,competitorId:rep.id});
+    });
+    if(reps.length<3)return;
+    const competitors=reps.slice(0,3);
+    const comp=C().runCompetition(competitors,{week,type:"wildcard"});
+    const winner=comp.winner;
+    const accepts=Math.random()<.65;
+    let punishment="";
+    if(accepts){
+      winner.safe=true;
+      punishment=Math.random()<.25
+        ?`${displayName(winner)} accepts safety and is forced to choose a consequence for another team.`
+        :`${displayName(winner)} accepts individual safety; their teammates remain vulnerable.`;
+    }else{
+      punishment=`${displayName(winner)} declines individual safety.`;
+    }
+    log(s,{
+      week,phase:"team",type:"wildcard",winnerId:winner.id,
+      participants:competitors.map(p=>p.id),
+      competitorIds:competitors.map(p=>p.id),
+      eligibleTeamIds:teamEntries.map(x=>x.teamId),
+      wildcardTeams:teamEntries,
+      safetyAccepted:accepts,
+      competition:comp,
+      title:`Wildcard Competition — ${comp.label}`,
+      lines:[
+        `${teamEntries.map(x=>`${x.teamName}: ${displayName(hg(s,x.competitorId))}`).join(" • ")}`,
+        `${displayName(winner)} wins the Wildcard.`,
+        punishment
+      ]
+    });
+  }
 
   /* ---------------------------- NOMINATIONS ---------------------------- */
   function chooseNominees(s,hoh){let pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe);if(pool.length<2)pool=living(s).filter(p=>p.id!==hoh.id);return (R()?.pickNominees?safePickNominees():shuffle(pool).slice(0,2));function safePickNominees(){try{return R().pickNominees(s,hoh,pool,Math.min(2,pool.length));}catch(e){return shuffle(pool).slice(0,2);}}}
