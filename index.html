@@ -14,7 +14,11 @@
   <section class="settings-panel"><h2>Season Settings</h2><div class="settings-grid"><label>Season Name<input id="seasonName"></label><label>Theme URL<input id="themeUrl" placeholder="https://..."></label><label>Logo URL<input id="logoUrl" placeholder="https://..."></label></div></section>
   <div class="section-heading"><div><h2>Houseguests</h2><p>16 custom players · portraits · five ratings</p></div><div class="tools"><span id="validity">Cast ready</span><button id="saveBtn">Save</button><button id="exportBtn">Export</button><label class="import">Import<input id="importInput" type="file" accept="application/json"></label><button id="resetBtn" class="danger">Reset</button></div></div>
   <div id="castGrid" class="cast-grid"></div>
-  <section class="section-heading"><div><h2>BB23 Teams</h2><p>Existing team data is preserved.</p></div></section><div id="teamsGrid" class="teams-grid"></div>
+  <section class="section-heading"><div><h2>BB23 Teams</h2><p>Teams are separate from alliances and follow the BB23 opening format.</p></div></section><div id="teamsGrid" class="teams-grid"></div>
+
+  <section class="section-heading"><div><h2>Starting Relationships</h2><p>Set friendship, trust, loyalty, rivalry, respect and attraction before the simulation.</p></div></section><section class="setup-social-panel"><div id="relationshipsGrid"></div></section>
+
+  <section class="section-heading"><div><h2>Custom Alliances</h2><p>Create alliances that exist from the start of the season. Multiple overlapping alliances are supported.</p></div></section><section class="setup-social-panel"><div id="allianceSetup"></div></section>
 </section>
 
 <section id="seasonView" class="hidden">
