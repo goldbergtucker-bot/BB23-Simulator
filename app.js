@@ -85,6 +85,37 @@
     // beneath the card, rather than the full POV field.
     let body = competitionCard(entry);
     if (["nominations","pov-players","veto-ceremony"].includes(entry.type)) body += targetPanel(d, view);
+    if (entry.type === "team-safety") {
+      const ids = d.safeMemberIds || d.participants || [];
+      const members = ids.map(id=>byId(view,id)).filter(Boolean);
+      body += `<section class="team-safety-panel">
+        <div class="team-safety-heading">
+          <span class="ceremony-label">TEAM SAFETY</span>
+          <h3>${esc(d.teamName || "Team")} — ALL REMAINING MEMBERS SAFE</h3>
+          <p>${esc((entry.lines||[])[0] || "Every remaining member of the HOH's team is safe from nomination.")}</p>
+        </div>
+        <div class="team-safety-members">${members.map(h=>playerCard(h,"SAFE")).join("")}</div>
+      </section>`;
+      return body;
+    }
+    if (entry.type === "wildcard") {
+      const winnerId = d.winnerId || entry.winnerId || entry.competition?.winner?.id;
+      const winner = byId(view, winnerId);
+      const teams = d.wildcardTeams || [];
+      body += `<section class="wildcard-panel">
+        <div class="wildcard-heading">
+          <span class="ceremony-label">WILDCARD COMPETITION</span>
+          <p>Three teams not protected by Team Safety each send one Houseguest to compete for individual safety.</p>
+        </div>
+        <div class="wildcard-competitors">${teams.map(t=>{
+          const h=byId(view,t.competitorId);
+          return h ? `<div class="wildcard-team"><div class="wildcard-team-name">${esc(t.teamName)}</div>${playerCard(h,"COMPETITOR")}</div>` : "";
+        }).join("")}</div>
+        ${winner ? `<div class="wildcard-result"><div class="ceremony-label">WILDCARD WINNER</div>${playerCard(winner,d.safetyAccepted?"SAFE":"WINNER")}</div>` : ""}
+        <div class="wildcard-decision">${esc((entry.lines||[]).slice(2).join(" ") || (d.safetyAccepted ? "Individual safety accepted." : "Individual safety declined."))}</div>
+      </section>`;
+      return body;
+    }
     if (entry.type === "teams" || entry.type === "team-draft") {
       const teams = d.teams || view?.teams || [];
       if (entry.type === "teams") {
@@ -362,4 +393,4 @@
     if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}
   }catch(e){console.warn(e)}}
   refreshSetup();resume();
-})();
+}   
