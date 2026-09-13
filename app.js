@@ -393,4 +393,4 @@
     if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}
   }catch(e){console.warn(e)}}
   refreshSetup();resume();
-}   
+})();
