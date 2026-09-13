@@ -8,9 +8,9 @@
  *   - separate Teams and Alliances
  */
 (() => {
-  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV10";
-  const LEGACY_STORAGE_KEYS = ["bb23CustomSimulatorBrantsteeleV9","bb23CustomSimulatorBrantsteeleV8","bb23CustomSimulatorBrantsteeleV7"];
-  const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV10Index";
+  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV12";
+  const LEGACY_STORAGE_KEYS = ["bb23CustomSimulatorBrantsteeleV11","bb23CustomSimulatorBrantsteeleV10","bb23CustomSimulatorBrantsteeleV9","bb23CustomSimulatorBrantsteeleV8","bb23CustomSimulatorBrantsteeleV7"];
+  const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV12Index";
   let state = GameState.createInitialState(BB23_CONFIG);
   let history = [];
   let pointer = -1;
@@ -210,7 +210,7 @@
     if(missing.length){toastMsg("Every houseguest needs a first and last name.");return;}
     const cast=JSON.parse(JSON.stringify(state));
     state=GameState.createInitialState(BB23_CONFIG);
-    state.season=cast.season;state.houseguests=cast.houseguests;state.teams=cast.teams;state.relationships=cast.relationships;state.alliances=cast.alliances||[];
+    state.season=cast.season;state.houseguests=cast.houseguests.map(h=>({...h,ratings:{general:50,physical:50,mental:50,social:50,strategic:50,...(h.ratings||{})}}));state.teams=cast.teams;state.relationships=cast.relationships;state.alliances=cast.alliances||[];
     SeasonEngine.simulateSeason(state,BB23_CONFIG);
     history=state.history||[];pointer=-1;localStorage.setItem(REVEAL_KEY,"-1");
     setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();
@@ -275,7 +275,25 @@
   function assignDemoTeams(){state.teams.forEach(t=>t.memberIds=[]);state.houseguests.forEach((h,i)=>{const t=state.teams[Math.floor(i/4)];h.teamId=t.id;t.memberIds.push(h.id);});}
   function loadDemo(){state=GameState.createInitialState(BB23_CONFIG);state.season.name="Big Brother 23 — Custom Demo";state.houseguests.forEach((h,i)=>{[h.firstName,h.lastName]=demoNames[i];h.ratings.general=45+(i*7)%45;h.ratings.physical=40+(i*11)%55;h.ratings.mental=42+(i*13)%53;h.ratings.social=45+(i*9)%50;h.ratings.strategic=40+(i*17)%58;});assignDemoTeams();refreshSetup();toastMsg("Demo cast loaded.");}
   function refreshSetupPortrait(h){const card=castGrid.querySelector(`.cast-card input[data-id="${h.id}"]`)?.closest('.cast-card');const box=card?.querySelector('.setup-portrait');if(box)box.innerHTML=portrait(h,"setup-img");const tools=card?.querySelector('.portrait-tools');if(tools)tools.innerHTML=`${h.portraitUrl?`<button type="button" class="clear-portrait" data-clear-portrait="${h.id}">Remove Picture</button>`:""}`;}
-  castGrid.addEventListener("input",e=>{const el=e.target,h=state.houseguests.find(x=>x.id===el.dataset.id);if(!h)return;if(el.dataset.field)h[el.dataset.field]=el.value;if(el.dataset.rating)h.ratings[el.dataset.rating]=Number(el.value);if(el.dataset.field==="portraitUrl")refreshSetupPortrait(h);if(el.dataset.field==="firstName"||el.dataset.field==="lastName")el.closest('.cast-card').querySelector('.cast-name').textContent=name(h);validate();});
+  function handleCastEdit(e){
+    const el=e.target;
+    const h=state.houseguests.find(x=>x.id===el.dataset.id);
+    if(!h)return;
+    if(el.dataset.field) h[el.dataset.field]=el.value;
+    if(el.dataset.rating){
+      if(!h.ratings) h.ratings={general:50,physical:50,mental:50,social:50,strategic:50};
+      h.ratings[el.dataset.rating]=Math.max(0,Math.min(100,Number(el.value)));
+      const label=el.closest("label")?.querySelector(".rating-label b");
+      if(label) label.textContent=String(h.ratings[el.dataset.rating]);
+    }
+    if(el.dataset.field==="portraitUrl") refreshSetupPortrait(h);
+    if(el.dataset.field==="firstName"||el.dataset.field==="lastName"){
+      const n=el.closest(".cast-card")?.querySelector(".cast-name"); if(n)n.textContent=name(h);
+    }
+    validate();
+  }
+  castGrid.addEventListener("input",handleCastEdit);
+  castGrid.addEventListener("change",handleCastEdit);
   castGrid.addEventListener("change",async e=>{const el=e.target;if(!el.matches('[data-portrait-upload]'))return;const h=state.houseguests.find(x=>x.id===el.dataset.id);const file=el.files?.[0];if(!h||!file)return;if(!file.type.startsWith("image/")){toastMsg("Please choose an image file.");el.value="";return;}try{h.portraitUrl=await imageFileToDataUrl(file,640,0.82);refreshSetup();toastMsg(`${name(h)} picture uploaded.`);}catch(err){console.error(err);toastMsg("Could not read that picture.");}el.value="";});
   castGrid.addEventListener("click",e=>{const b=e.target.closest('[data-clear-portrait]');if(!b)return;const h=state.houseguests.find(x=>x.id===b.dataset.clearPortrait);if(!h)return;h.portraitUrl="";refreshSetup();toastMsg("Picture removed.");});
   function imageFileToDataUrl(file,maxSize=640,quality=0.82){return new Promise((resolve,reject)=>{const reader=new FileReader();reader.onerror=()=>reject(reader.error||new Error("File read failed"));reader.onload=()=>{const img=new Image();img.onerror=()=>reject(new Error("Image decode failed"));img.onload=()=>{const scale=Math.min(1,maxSize/Math.max(img.naturalWidth,img.naturalHeight));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL("image/jpeg",quality));};img.src=reader.result;};reader.readAsDataURL(file);});}
