@@ -8,9 +8,9 @@
  *   - separate Teams and Alliances
  */
 (() => {
-  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV8";
-  const LEGACY_STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV7";
-  const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV7Index";
+  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV10";
+  const LEGACY_STORAGE_KEYS = ["bb23CustomSimulatorBrantsteeleV9","bb23CustomSimulatorBrantsteeleV8","bb23CustomSimulatorBrantsteeleV7"];
+  const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV10Index";
   let state = GameState.createInitialState(BB23_CONFIG);
   let history = [];
   let pointer = -1;
@@ -61,9 +61,20 @@
     </section>`;
   }
 
+  function targetPanel(d, view) {
+    const target = d.intendedTarget || view?.intendedTarget;
+    const backdoor = byId(view, d.backdoorTargetId || view?.backdoorTargetId);
+    if (!target && !backdoor) return "";
+    return `<section class="target-panel">
+      ${target ? `<div><span>HOH'S INTENDED TARGET</span><strong>${esc(target)}</strong></div>` : ""}
+      ${backdoor ? `<div><span>POTENTIAL BACKDOOR TARGET</span><strong>${esc(name(backdoor))}</strong></div>` : ""}
+    </section>`;
+  }
+
   function eventData(entry, view) {
     const d = entry.data || {};
-    let body = competitionCard(entry);
+    let body = entry.type === "veto" ? "" : competitionCard(entry);
+    if (["nominations","pov-players","veto-ceremony"].includes(entry.type)) body += targetPanel(d, view);
     if (entry.type === "eviction-voting") {
       const votes = d.votes || view?.evictionVotes || [];
       body += `<div class="vote-list">${votes.map(v=>{const voter=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(voter,"vote-portrait")}<strong>${esc(name(voter))}</strong></div><div class="vote-arrow">VOTES TO EVICT</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(name(target))}</strong></div></div>`}).join("")}</div>`;
@@ -72,6 +83,13 @@
     if (entry.type === "jury-vote") {
       const votes = d.votes || [];
       body += `<div class="vote-list jury-votes">${votes.map(v=>{const juror=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(juror,"vote-portrait")}<strong>${esc(name(juror))}</strong></div><div class="vote-arrow">VOTES FOR</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(name(target))}</strong></div></div>`}).join("")}</div>`;
+      return body;
+    }
+    if (entry.type === "eviction") {
+      const evicted = byId(view, d.evictedId);
+      const a = Number(d.evictedVoteCount ?? 0);
+      const b = Number(d.stayVoteCount ?? 0);
+      body += `<div class="eviction-result">${evicted ? playerCard(evicted,"EVICTED") : ""}<div class="eviction-vote-count">By a vote of <strong>${a} to ${b}</strong>, ${esc(name(evicted))}, you have been evicted.</div></div>`;
       return body;
     }
     const players = findPlayers(entry,view);
@@ -276,6 +294,15 @@
   timeline.addEventListener("click",e=>{const b=e.target.closest("button[data-index]");if(!b)return;const i=Number(b.dataset.index);if(i<=pointer+1)revealTo(i);});
   document.querySelectorAll("[data-tab]").forEach(b=>b.onclick=()=>{activeTab=b.dataset.tab;document.querySelectorAll("[data-tab]").forEach(x=>x.classList.toggle("active",x===b));renderTab();});
 
-  function resume(){try{const raw=localStorage.getItem(STORAGE_KEY);if(!raw)return;const x=JSON.parse(raw);if(!x.houseguests)return;state=x;history=state.history||[];const saved=Number(localStorage.getItem(REVEAL_KEY));if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}}catch(e){console.warn(e)}}
+  function resume(){try{
+    let raw=localStorage.getItem(STORAGE_KEY);
+    if(!raw){ for(const key of LEGACY_STORAGE_KEYS){ raw=localStorage.getItem(key); if(raw) break; } }
+    if(!raw)return;
+    const x=JSON.parse(raw); if(!x.houseguests)return;
+    state=x; state.intendedTarget=state.intendedTarget||null; state.targetHistory=state.targetHistory||[]; state.backdoorTargetId=state.backdoorTargetId||null;
+    history=state.history||[];
+    const saved=Number(localStorage.getItem(REVEAL_KEY));
+    if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}
+  }catch(e){console.warn(e)}}
   refreshSetup();resume();
 })();
