@@ -143,7 +143,11 @@
       const winner = byId(view, d.winnerId);
       if (winner) body += `<div class="hero-players veto-winner-only">${playerCard(winner,"POV WINNER")}</div>`;
     } else if (players.length) {
-      body += `<div class="hero-players">${players.slice(0,8).map(h=>playerCard(h,h.id===d.winnerId?"WINNER":"")).join("")}</div>`;
+      // HOH competitions must display every eligible houseguest. Older versions
+      // limited the generic event renderer to eight cards, which incorrectly
+      // hid half the cast in a 16-person season.
+      const displayPlayers = entry.type === "hoh" ? players : players;
+      body += `<div class="hero-players ${entry.type === "hoh" ? "hoh-competition-players" : ""}">${displayPlayers.map(h=>playerCard(h,h.id===d.winnerId?"WINNER":"")).join("")}</div>`;
     }
     return body;
   }
