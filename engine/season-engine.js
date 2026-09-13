@@ -52,7 +52,17 @@
     if (entry.type === "hoh") { base.winnerId = entry.winnerId || state.currentHOH || null; base.participants = living(state).map(h => h.id); }
     if (entry.type === "wildcard") base.winnerId = (state.history.length && state.history[state.history.length-1]?.winnerId) || null;
     if (entry.type === "veto") { base.winnerId = entry.winnerId || state.vetoWinners?.[0] || null; base.participants = ids(state.povPlayers); }
+    if (entry.type === "pov-players") {
+      base.povPlayers = ids(state.povPlayers);
+      base.participants = ids(state.povPlayers);
+      base.nomineeIds = ids(state.nominees);
+      base.hohId = entry.hohId || state.currentHOH || null;
+    }
     if (entry.type === "nominations" || entry.type === "veto-ceremony" || entry.type === "eviction") base.participants = ids(state.nominees);
+    if (entry.type === "nominations" || entry.type === "veto-ceremony") {
+      base.hohId = entry.hohId || state.currentHOH || null;
+      base.nomineeIds = ids(state.nominees);
+    }
     if (entry.type === "eviction-voting") { base.nomineeIds = ids(state.nominees); base.voterIds = (state.evictionVotes||[]).map(v=>v.voterId); base.votes = (state.evictionVotes||[]).map(v=>({voterId:v.voterId,targetId:v.targetId})); }
     if (entry.type === "eviction") { const id=(state.evicted||[]).slice(-1)[0]; base.evictedId=id||null; }
     if (entry.type === "final3-part1" || entry.type === "final3-part2" || entry.type === "final3-part3") base.participants = living(state).map(h=>h.id);
@@ -331,6 +341,15 @@
     const povComp = C().runCompetition(povPool,{week,type: week>=9&&week%1===0 ? (week===9||week===10 ? "pov" : "pov") : "pov"});
     const vetoWinner = povComp.winner;
     state.vetoWinners = [vetoWinner.id];
+    log(state, {
+      week, phase: "standard", type: "pov-players", hohId: hoh.id,
+      title: "POV Picked Players",
+      lines: [
+        `${displayName(hoh)} and the two nominees are automatically selected to play in the Power of Veto competition.`,
+        `${povPool.length} total players are in the POV field, including ${Math.max(0, povPool.length - 3)} houseguests selected to join them.`
+      ]
+    });
+
     log(state, {
       week, phase: "standard", type: "veto", winnerId: vetoWinner.id,
       title: `Power of Veto — ${povComp.label}`,
