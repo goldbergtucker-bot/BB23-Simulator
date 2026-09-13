@@ -22,7 +22,7 @@ window.BB23_CONFIG = Object.freeze({
   teamWeeks: 4,
   highRollerStartWeek: 6,
   highRollerEndWeek: 8,
-  juryThresholdPlacement: 9,
+  juryThresholdPlacement: 11,
 
   /* Official BB23 competition names and concise descriptions of the formats used on the show. */
   competitionSchedule: [
