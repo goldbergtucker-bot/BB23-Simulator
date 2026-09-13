@@ -16,3 +16,16 @@
 
 @media(max-width:900px){.relationship-sliders{grid-template-columns:1fr 1fr}.alliance-create{grid-template-columns:1fr}.setup-alliance{grid-template-columns:1fr}.competition-top{align-items:flex-start;flex-direction:column}}
 @media(max-width:600px){.relationship-selects,.relationship-sliders{grid-template-columns:1fr}}
+
+
+/* V8 ceremony presentation */
+.ceremony-layout,.pov-picked-layout{max-width:950px;margin:0 auto;display:flex;flex-direction:column;align-items:center;gap:10px}
+.ceremony-role-section{width:100%;text-align:center}
+.ceremony-label{font-size:10px;font-weight:950;letter-spacing:1.8px;color:#8f9bb2;margin:4px 0 10px}
+.ceremony-hoh{display:flex;justify-content:center}
+.ceremony-arrow{font-size:25px;font-weight:950;color:#76839a;line-height:1;padding:3px 0}
+.ceremony-players{display:flex;justify-content:center;align-items:flex-start;gap:22px;flex-wrap:wrap}
+.ceremony-secondary{max-width:950px;margin:20px auto 0;padding-top:18px;border-top:1px solid var(--line);text-align:center}
+.pov-picked-layout .ceremony-role-section{background:#0d121b;border:1px solid #252d3c;border-radius:12px;padding:15px 12px}
+.pov-picked-layout .ceremony-arrow{font-size:22px;color:#8f9bb2}
+@media(max-width:800px){.ceremony-players{gap:12px}.ceremony-players .player-card{width:125px}.pov-picked-layout .ceremony-role-section{padding:12px 8px}}
