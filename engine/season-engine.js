@@ -58,7 +58,12 @@
       // This prevents the outgoing HOH from appearing in the next HOH competition.
       base.participants = entry.competition?.ranking?.map(x => x.id) || living(state).filter(h => h.id !== base.winnerId).map(h => h.id);
     }
-    if (entry.type === "wildcard") base.winnerId = (state.history.length && state.history[state.history.length-1]?.winnerId) || null;
+    if (entry.type === "wildcard") {
+      // Wildcard winner belongs to THIS competition event. Never inherit the
+      // previous event winner (which is often the HOH).
+      base.winnerId = entry.winnerId || entry.competition?.winner?.id || null;
+      base.participants = entry.competition?.ranking?.map(x => x.id) || [];
+    }
     if (entry.type === "veto") { base.winnerId = entry.winnerId || state.vetoWinners?.[0] || null; base.participants = []; }
     if (entry.type === "veto-ceremony") {
       base.hohId = entry.hohId || state.currentHOH || null;
