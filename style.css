@@ -6,3 +6,9 @@
 .upload-portrait input{display:none}
 .clear-portrait{border:0;background:transparent;color:#b42318;font-weight:700;font-size:12px;cursor:pointer;padding:7px 4px}
 .portrait-help{display:block;color:#777;font-size:11px;line-height:1.35;margin-top:5px}
+
+/* V6 — official BB23 competition cards */
+.competition-card{max-width:850px;margin:4px auto 18px;padding:15px 18px;border:1px solid #35405a;border-radius:12px;background:linear-gradient(135deg,rgba(35,44,67,.9),rgba(16,22,34,.95));text-align:left;box-shadow:0 10px 25px rgba(0,0,0,.18)}
+.competition-kicker{font-size:9px;font-weight:950;letter-spacing:1.8px;color:#8f9bb2;margin-bottom:4px}
+.competition-card h3{margin:0;font-size:20px;color:#f6f7fb}
+.competition-card p{margin:6px 0 0;color:#b7c0d0;font-size:12px;line-height:1.55}
