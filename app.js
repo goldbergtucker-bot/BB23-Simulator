@@ -70,7 +70,8 @@
     const e=history[index], view=e.snapshot;
     eventKicker.textContent=`${weekLabel(e.week)}  •  ${(e.phase||"EVENT").replaceAll("-"," ").toUpperCase()}`;
     eventTitle.textContent=e.title;
-    eventBody.innerHTML=`${eventData(e,view)}${eventText(e)}`;
+    const compInfo = e.competitionName ? `<section class="competition-card"><div class="competition-kicker">COMPETITION</div><h3>${esc(e.competitionName)}</h3><p>${esc(e.competitionDescription||"")}</p></section>` : "";
+    eventBody.innerHTML=`${eventData(e,view)}${compInfo}${eventText(e)}`;
     eventCounter.textContent=`${index+1} / ${history.length}`;
   }
   function statusBadge(h,view){
