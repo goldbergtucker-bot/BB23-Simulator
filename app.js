@@ -75,7 +75,7 @@
       return body;
     }
     const players = findPlayers(entry,view);
-    if (entry.type === "nominations" || entry.type === "veto-ceremony") {
+    if (entry.type === "nominations") {
       const hoh = byId(view, d.hohId);
       const nomineeIds = d.nomineeIds || view?.nominees || [];
       const nominees = nomineeIds.map(id => byId(view, id)).filter(Boolean);
@@ -90,10 +90,21 @@
           <div class="ceremony-players">${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div>
         </div>
       </div>`;
-      if(entry.type === "veto-ceremony" && d.winnerId){
-        const holder = byId(view,d.winnerId);
-        body += `<div class="ceremony-secondary"><div class="ceremony-label">POWER OF VETO</div><div class="ceremony-players">${playerCard(holder,"VETO HOLDER")}</div></div>`;
-      }
+    } else if (entry.type === "veto-ceremony") {
+      const hoh = byId(view, d.hohId);
+      const holder = byId(view, d.winnerId);
+      const nomineeIds = d.finalNomineeIds || d.nomineeIds || view?.nominees || [];
+      const nominees = nomineeIds.map(id => byId(view, id)).filter(Boolean);
+      const combinedTop = holder && hoh && holder.id === hoh.id;
+      body += `<div class="ceremony-layout veto-ceremony-layout">
+        <div class="ceremony-role-section">
+          <div class="ceremony-label">${combinedTop ? "HEAD OF HOUSEHOLD / POV HOLDER" : "HEAD OF HOUSEHOLD"}</div>
+          <div class="ceremony-hoh">${playerCard(hoh, combinedTop ? "HOH / POV HOLDER" : "HOH")}</div>
+        </div>
+        ${combinedTop ? "" : `<div class="ceremony-arrow">▼</div><div class="ceremony-role-section"><div class="ceremony-label">NOMINEES</div><div class="ceremony-players">${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div></div><div class="ceremony-arrow">▼</div><div class="ceremony-role-section"><div class="ceremony-label">POV HOLDER</div><div class="ceremony-players">${playerCard(holder,"POV HOLDER")}</div></div>`}
+        ${combinedTop ? `<div class="ceremony-arrow">▼</div>` : ""}
+        <div class="ceremony-role-section"><div class="ceremony-label">${combinedTop ? "FINAL NOMINEES" : (d.vetoUsed ? "FINAL NOMINEES" : "NOMINEES")}</div><div class="ceremony-players">${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div></div>
+      </div>`;
     } else if (entry.type === "pov-players") {
       const hoh = byId(view, d.hohId);
       const nomineeIds = d.nomineeIds || [];
@@ -110,6 +121,9 @@
           <div class="ceremony-players">${picked.map(h=>playerCard(h,"PICKED")).join("")}</div>
         </div>
       </div>`;
+    } else if (entry.type === "veto") {
+      const winner = byId(view, d.winnerId);
+      if (winner) body += `<div class="hero-players veto-winner-only">${playerCard(winner,"POV WINNER")}</div>`;
     } else if (players.length) {
       body += `<div class="hero-players">${players.slice(0,8).map(h=>playerCard(h,h.id===d.winnerId?"WINNER":"")).join("")}</div>`;
     }
