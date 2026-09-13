@@ -73,7 +73,10 @@
 
   function eventData(entry, view) {
     const d = entry.data || {};
-    let body = entry.type === "veto" ? "" : competitionCard(entry);
+    // Every competition, including POV, gets its official competition card
+    // and description. The POV event still shows only the winner portrait
+    // beneath the card, rather than the full POV field.
+    let body = competitionCard(entry);
     if (["nominations","pov-players","veto-ceremony"].includes(entry.type)) body += targetPanel(d, view);
     if (entry.type === "eviction-voting") {
       const votes = d.votes || view?.evictionVotes || [];
