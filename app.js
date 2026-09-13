@@ -8,7 +8,8 @@
  *   - separate Teams and Alliances
  */
 (() => {
-  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV7";
+  const STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV8";
+  const LEGACY_STORAGE_KEY = "bb23CustomSimulatorBrantsteeleV7";
   const REVEAL_KEY = "bb23CustomSimulatorBrantsteeleV7Index";
   let state = GameState.createInitialState(BB23_CONFIG);
   let history = [];
@@ -74,8 +75,41 @@
       return body;
     }
     const players = findPlayers(entry,view);
-    if (entry.type === "nominations" || entry.type === "veto-ceremony" || entry.type === "eviction") {
-      body += `<div class="hero-players">${players.slice(0,3).map(h=>playerCard(h,(d.nomineeIds||[]).includes(h.id)?"NOMINEE":"")).join("")}</div>`;
+    if (entry.type === "nominations" || entry.type === "veto-ceremony") {
+      const hoh = byId(view, d.hohId);
+      const nomineeIds = d.nomineeIds || view?.nominees || [];
+      const nominees = nomineeIds.map(id => byId(view, id)).filter(Boolean);
+      body += `<div class="ceremony-layout">
+        <div class="ceremony-role-section">
+          <div class="ceremony-label">HEAD OF HOUSEHOLD</div>
+          <div class="ceremony-hoh">${playerCard(hoh, "HOH")}</div>
+        </div>
+        <div class="ceremony-arrow">▼</div>
+        <div class="ceremony-role-section">
+          <div class="ceremony-label">NOMINEES</div>
+          <div class="ceremony-players">${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div>
+        </div>
+      </div>`;
+      if(entry.type === "veto-ceremony" && d.winnerId){
+        const holder = byId(view,d.winnerId);
+        body += `<div class="ceremony-secondary"><div class="ceremony-label">POWER OF VETO</div><div class="ceremony-players">${playerCard(holder,"VETO HOLDER")}</div></div>`;
+      }
+    } else if (entry.type === "pov-players") {
+      const hoh = byId(view, d.hohId);
+      const nomineeIds = d.nomineeIds || [];
+      const nominees = nomineeIds.map(id=>byId(view,id)).filter(Boolean);
+      const picked = (d.povPlayers || []).map(id=>byId(view,id)).filter(h=>h && h.id!==d.hohId && !nomineeIds.includes(h.id));
+      body += `<div class="pov-picked-layout">
+        <div class="ceremony-role-section">
+          <div class="ceremony-label">AUTOMATIC PLAYERS</div>
+          <div class="ceremony-players">${playerCard(hoh,"HOH")} ${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div>
+        </div>
+        <div class="ceremony-arrow">+</div>
+        <div class="ceremony-role-section">
+          <div class="ceremony-label">POV PICKED PLAYERS</div>
+          <div class="ceremony-players">${picked.map(h=>playerCard(h,"PICKED")).join("")}</div>
+        </div>
+      </div>`;
     } else if (players.length) {
       body += `<div class="hero-players">${players.slice(0,8).map(h=>playerCard(h,h.id===d.winnerId?"WINNER":"")).join("")}</div>`;
     }
