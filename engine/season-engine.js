@@ -210,9 +210,9 @@
     const reps=[];
     const teamEntries=[];
     eligibleTeams.forEach(t=>{
-      const ms=t.memberIds.map(id=>hg(s,id)).filter(p=>p?.active&&!p.safe);
-      if(!ms.length)return;
-      const rep=ms.reduce((a,b)=>
+      const members=t.memberIds.map(id=>hg(s,id)).filter(p=>p?.active); const ms=members.filter(p=>!p.safe); const candidates=ms.length?ms:members;
+      if(!candidates.length)return;
+      const rep=candidates.reduce((a,b)=>
         (b.ratings.general+b.ratings.social)>(a.ratings.general+a.ratings.social)?b:a
       );
       reps.push(rep);
