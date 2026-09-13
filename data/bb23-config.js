@@ -67,7 +67,7 @@ window.BB23_CONFIG = Object.freeze({
 
   highRollerGames: [
     { week:6, type:"bonusVeto", name:"Veto Derby", cost:50, description:"Spend BB Bucks for a chance to win an additional Veto." },
-    { week:7, type:"selfRemoval", name:"Chopping Block Roulette", cost:100, description:"Spend BB Bucks for a chance at a power that can protect a player from the block." },
+    { week:7, type:"selfRemoval", name:"Chopping Block Roulette", cost:125, description:"Spend BB Bucks for a chance at a power that can protect a player from the block." },
     { week:8, type:"voteFlip", name:"Coin of Destiny", cost:250, description:"Spend BB Bucks for a chance to gain a secret power capable of challenging HOH control." }
   ],
 
