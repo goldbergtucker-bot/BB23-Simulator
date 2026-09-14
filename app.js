@@ -31,8 +31,25 @@
   const REL_TYPES = ["Unspecified","Showmance","Bromance","Best Friends","Close Friends","Allies","Rivalry","Mentor / Mentee","Family","Frenemies","Secret Pair","Other"];
   const ALLIANCE_TYPES = ["Majority Alliance","Core Alliance","Final Two","Final Three","Girls' Alliance","Guys' Alliance","Secret Alliance","Side Alliance","Team","Custom"];
 
-  const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+  const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;", "'":"&#039;"}[c]));
   const name = h => `${h?.firstName||""} ${h?.lastName||""}`.trim() || `Houseguest ${h?.slot||""}`;
+  const displayName = h => {
+    if (!h) return "Houseguest";
+    if (String(h.displayName || "").trim()) return String(h.displayName).trim();
+    const current = h.id ? state.houseguests.find(x => x.id === h.id) : null;
+    if (String(current?.displayName || "").trim()) return String(current.displayName).trim();
+    return String(h.firstName || "").trim() || name(h);
+  };
+  const displayText = text => {
+    let out = String(text ?? "");
+    [...(state.houseguests || [])]
+      .sort((a,b)=>name(b).length-name(a).length)
+      .forEach(h=>{
+        const full=name(h), short=displayName(h);
+        if(full && short && full!==short) out=out.split(full).join(short);
+      });
+    return out;
+  };
   const byId = (view,id) => view?.houseguests?.find(h=>h.id===id) || state.houseguests.find(h=>h.id===id);
   const ordinal = n => SeasonEngine.ordinal(n);
   const weekLabel = w => w === "Final" ? "FINALE" : w === 0 ? "MOVE-IN" : `WEEK ${w}`;
@@ -42,7 +59,7 @@
     if (!h) return `<div class="${cls} placeholder-portrait">?</div>`;
     return h.portraitUrl ? `<img class="${cls}" src="${esc(h.portraitUrl)}" alt="${esc(name(h))}" onerror="this.onerror=null;this.replaceWith(Object.assign(document.createElement('div'),{className:'${cls} placeholder-portrait',textContent:'?'}))">` : `<div class="${cls} placeholder-portrait">?</div>`;
   }
-  function playerCard(h, role="") { return `<div class="player-card"><div class="portrait-box">${portrait(h)}</div><strong>${esc(name(h))}</strong>${role?`<span>${esc(role)}</span>`:""}</div>`; }
+  function playerCard(h, role="", fullName=false) { return `<div class="player-card"><div class="portrait-box">${portrait(h)}</div><strong>${esc(fullName ? name(h) : displayName(h))}</strong>${role?`<span>${esc(role)}</span>`:""}</div>`; }
 
   function findPlayers(entry, view) {
     const d = entry.data || {};
@@ -76,8 +93,8 @@
     const backdoor = byId(view, d.backdoorTargetId || view?.backdoorTargetId);
     if (!target && !backdoor) return "";
     return `<section class="target-panel">
-      ${target ? `<div><span>HOH'S INTENDED TARGET</span><strong>${esc(target)}</strong></div>` : ""}
-      ${backdoor ? `<div><span>POTENTIAL BACKDOOR TARGET</span><strong>${esc(name(backdoor))}</strong></div>` : ""}
+      ${target ? `<div><span>HOH'S INTENDED TARGET</span><strong>${esc(displayText(target))}</strong></div>` : ""}
+      ${backdoor ? `<div><span>POTENTIAL BACKDOOR TARGET</span><strong>${esc(displayName(backdoor))}</strong></div>` : ""}
     </section>`;
   }
 
@@ -88,13 +105,15 @@
     return `<section class="daily-feed-page">
       <div class="daily-feed-header"><div><span>BIG BROTHER LIVE FEEDS</span><h3>${esc(d.day||entry.day||"")}</h3><p>Week ${esc(entry.week)} · Complete daily feed</p></div><div class="feed-count">${items.length}<small>updates</small></div></div>
       ${context.length?`<details class="feed-context"><summary>Story context used for this day's feeds</summary>${context.map(c=>`<p><strong>${esc(c.label)}:</strong> ${esc(c.text)}</p>`).join("")}</details>`:""}
-      <div class="daily-feed-cast">${pics.slice(0,12).map(p=>`<div class="daily-feed-person">${portrait(p,"daily-feed-portrait")}<span>${esc(name(p))}</span></div>`).join("")}</div>
-      <div class="daily-feed-updates">${items.map(x=>`<article class="feed-update ${x.kind==='feed-break'?'feed-break':''}"><time>${esc(x.time)}</time><div><p>${esc(x.text)}</p>${(x.participants||[]).length?`<small>${(x.participants||[]).map(id=>byId(entry.snapshot,id)).filter(Boolean).map(p=>esc(name(p))).join(" · ")}</small>`:""}</div></article>`).join("")}</div>
+      <div class="daily-feed-cast">${pics.slice(0,12).map(p=>`<div class="daily-feed-person">${portrait(p,"daily-feed-portrait")}<span>${esc(displayName(p))}</span></div>`).join("")}</div>
+      <div class="daily-feed-updates">${items.map(x=>`<article class="feed-update ${x.kind==='feed-break'?'feed-break':''}"><time>${esc(x.time)}</time><div><p>${esc(displayText(x.text))}</p>${(x.participants||[]).length?`<small>${(x.participants||[]).map(id=>byId(entry.snapshot,id)).filter(Boolean).map(p=>esc(displayName(p))).join(" · ")}</small>`:""}</div></article>`).join("")}</div>
     </section>`;
   }
 
   function eventData(entry, view) {
     const d = entry.data || {};
+    const finalNames = entry.phase === "finale" || entry.type === "winner";
+    const card = (h, role="") => playerCard(h, role, finalNames);
     // Every competition, including POV, gets its official competition card
     // and description. The POV event still shows only the winner portrait
     // beneath the card, rather than the full POV field.
@@ -109,7 +128,7 @@
           <h3>${esc(d.teamName || "Team")} — ALL REMAINING MEMBERS SAFE</h3>
           <p>${esc((entry.lines||[])[0] || "Every remaining member of the HOH's team is safe from nomination.")}</p>
         </div>
-        <div class="team-safety-members">${members.map(h=>playerCard(h,"SAFE")).join("")}</div>
+        <div class="team-safety-members">${members.map(h=>card(h,"SAFE")).join("")}</div>
       </section>`;
       return body;
     }
@@ -124,9 +143,9 @@
         </div>
         <div class="wildcard-competitors">${teams.map(t=>{
           const h=byId(view,t.competitorId);
-          return h ? `<div class="wildcard-team"><div class="wildcard-team-name">${esc(t.teamName)}</div>${playerCard(h,"COMPETITOR")}</div>` : "";
+          return h ? `<div class="wildcard-team"><div class="wildcard-team-name">${esc(t.teamName)}</div>${card(h,"COMPETITOR")}</div>` : "";
         }).join("")}</div>
-        ${winner ? `<div class="wildcard-result"><div class="ceremony-label">WILDCARD WINNER</div>${playerCard(winner,d.safetyAccepted?"SAFE":"WINNER")}</div>` : ""}
+        ${winner ? `<div class="wildcard-result"><div class="ceremony-label">WILDCARD WINNER</div>${card(winner,d.safetyAccepted?"SAFE":"WINNER")}</div>` : ""}
         <div class="wildcard-decision">${esc((entry.lines||[]).slice(2).join(" ") || (d.safetyAccepted ? "Individual safety accepted." : "Individual safety declined."))}</div>
       </section>`;
       return body;
@@ -134,31 +153,31 @@
     if (entry.type === "teams" || entry.type === "team-draft") {
       const teams = d.teams || view?.teams || [];
       if (entry.type === "teams") {
-        body += `<div class="teams-sim-grid">${teams.map(t=>`<section class="team-sim-card"><h3>${esc(t.name)}</h3><div class="team-sim-captain">${t.captainId?playerCard(byId(view,t.captainId),"TEAM CAPTAIN"):""}</div><div class="team-sim-members">${(t.memberIds||[]).map(id=>playerCard(byId(view,id),id===t.captainId?"CAPTAIN":"TEAMMATE")).join("")}</div></section>`).join("")}</div>`;
+        body += `<div class="teams-sim-grid">${teams.map(t=>`<section class="team-sim-card"><h3>${esc(t.name)}</h3><div class="team-sim-captain">${t.captainId?card(byId(view,t.captainId),"TEAM CAPTAIN"):""}</div><div class="team-sim-members">${(t.memberIds||[]).map(id=>card(byId(view,id),id===t.captainId?"CAPTAIN":"TEAMMATE")).join("")}</div></section>`).join("")}</div>`;
       } else {
         const cap=byId(view,d.winnerId);
-        body += `<div class="hero-players">${cap?playerCard(cap,"TEAM CAPTAIN"):""}</div>`;
+        body += `<div class="hero-players">${cap?card(cap,"TEAM CAPTAIN"):""}</div>`;
       }
       return body;
     }
     if (["bb-bucks","bb-bucks-envelopes","veto-derby","veto-derby-result","chopping-block-roulette","coin-of-destiny","coin-renomination"].includes(entry.type)) {
       const winner=byId(view,d.winnerId);
       if (entry.type === "bb-bucks" || entry.type === "bb-bucks-envelopes") {
-        const rows=(d.participants||[]).map((id,i)=>{const h=byId(view,id);const award=entry.type === "bb-bucks" ? (i<3?100:i<6?75:50) : null;return `<div class="bucks-row">${portrait(h,"vote-portrait")}<strong>${esc(name(h))}</strong><span>${entry.type === "bb-bucks" ? `+${award} BB Bucks` : "BONUS BB BUCKS"}</span></div>`}).join("");
+        const rows=(d.participants||[]).map((id,i)=>{const h=byId(view,id);const award=entry.type === "bb-bucks" ? (i<3?100:i<6?75:50) : null;return `<div class="bucks-row">${portrait(h,"vote-portrait")}<strong>${esc(displayName(h))}</strong><span>${entry.type === "bb-bucks" ? `+${award} BB Bucks` : "BONUS BB BUCKS"}</span></div>`}).join("");
         body += `<div class="bucks-list">${rows}</div>`;
       } else if (winner) {
-        body += `<div class="hero-players">${playerCard(winner, entry.type==="coin-of-destiny"?"COIN HOLDER":entry.type==="veto-derby-result"?"SECOND VETO":"POWER WINNER")}</div>`;
+        body += `<div class="hero-players">${card(winner, entry.type==="coin-of-destiny"?"COIN HOLDER":entry.type==="veto-derby-result"?"SECOND VETO":"POWER WINNER")}</div>`;
       }
       return body;
     }
     if (entry.type === "eviction-voting") {
       const votes = d.votes || view?.evictionVotes || [];
-      body += `<div class="vote-list">${votes.map(v=>{const voter=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(voter,"vote-portrait")}<strong>${esc(name(voter))}</strong></div><div class="vote-arrow">VOTES TO EVICT</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(name(target))}</strong></div></div>`}).join("")}</div>`;
+      body += `<div class="vote-list">${votes.map(v=>{const voter=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(voter,"vote-portrait")}<strong>${esc(displayName(voter))}</strong></div><div class="vote-arrow">VOTES TO EVICT</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(displayName(target))}</strong></div></div>`}).join("")}</div>`;
       return body;
     }
     if (entry.type === "jury-vote") {
       const votes = d.votes || [];
-      body += `<div class="vote-list jury-votes">${votes.map(v=>{const juror=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(juror,"vote-portrait")}<strong>${esc(name(juror))}</strong></div><div class="vote-arrow">VOTES FOR</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(name(target))}</strong></div></div>`}).join("")}</div>`;
+      body += `<div class="vote-list jury-votes">${votes.map(v=>{const juror=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(juror,"vote-portrait")}<strong>${esc(displayName(juror))}</strong></div><div class="vote-arrow">VOTES FOR</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(displayName(target))}</strong></div></div>`}).join("")}</div>`;
       return body;
     }
     if (entry.type === "eviction") {
@@ -175,7 +194,7 @@
         b = stayId ? Number(counts[stayId] || 0) : 0;
       }
       const tieBreaker= d.tieBreakVoteId ? byId(view,d.tieBreakVoteId) : null;
-      body += `<div class="eviction-result">${evicted ? playerCard(evicted,"EVICTED") : ""}<div class="eviction-vote-count">By a vote of <strong>${a} to ${b}</strong>, ${esc(name(evicted))}, you have been evicted.${tieBreaker ? ` <div class="tie-break-note"><strong>HOH TIE-BREAKER:</strong> ${esc(name(tieBreaker))} was evicted by ${esc(name(byId(view,d.hohId)))}.</div>` : ""}</div></div>`;
+      body += `<div class="eviction-result">${evicted ? card(evicted,"EVICTED") : ""}<div class="eviction-vote-count">By a vote of <strong>${a} to ${b}</strong>, ${esc(displayName(evicted))}, you have been evicted.${tieBreaker ? ` <div class="tie-break-note"><strong>HOH TIE-BREAKER:</strong> ${esc(displayName(tieBreaker))} was evicted by ${esc(displayName(byId(view,d.hohId)))}.</div>` : ""}</div></div>`;
       return body;
     }
     const players = findPlayers(entry,view);
@@ -186,12 +205,12 @@
       body += `<div class="ceremony-layout">
         <div class="ceremony-role-section">
           <div class="ceremony-label">HEAD OF HOUSEHOLD</div>
-          <div class="ceremony-hoh">${playerCard(hoh, "HOH")}</div>
+          <div class="ceremony-hoh">${card(hoh, "HOH")}</div>
         </div>
         <div class="ceremony-arrow">▼</div>
         <div class="ceremony-role-section">
           <div class="ceremony-label">NOMINEES</div>
-          <div class="ceremony-players">${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div>
+          <div class="ceremony-players">${nominees.map(h=>card(h,"NOMINEE")).join("")}</div>
         </div>
       </div>`;
     } else if (entry.type === "veto-ceremony") {
@@ -203,11 +222,11 @@
       body += `<div class="ceremony-layout veto-ceremony-layout">
         <div class="ceremony-role-section">
           <div class="ceremony-label">${combinedTop ? "HEAD OF HOUSEHOLD / POV HOLDER" : "HEAD OF HOUSEHOLD"}</div>
-          <div class="ceremony-hoh">${playerCard(hoh, combinedTop ? "HOH / POV HOLDER" : "HOH")}</div>
+          <div class="ceremony-hoh">${card(hoh, combinedTop ? "HOH / POV HOLDER" : "HOH")}</div>
         </div>
-        ${combinedTop ? "" : `<div class="ceremony-arrow">▼</div><div class="ceremony-role-section"><div class="ceremony-label">NOMINEES</div><div class="ceremony-players">${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div></div><div class="ceremony-arrow">▼</div><div class="ceremony-role-section"><div class="ceremony-label">POV HOLDER</div><div class="ceremony-players">${playerCard(holder,"POV HOLDER")}</div></div>`}
+        ${combinedTop ? "" : `<div class="ceremony-arrow">▼</div><div class="ceremony-role-section"><div class="ceremony-label">NOMINEES</div><div class="ceremony-players">${nominees.map(h=>card(h,"NOMINEE")).join("")}</div></div><div class="ceremony-arrow">▼</div><div class="ceremony-role-section"><div class="ceremony-label">POV HOLDER</div><div class="ceremony-players">${card(holder,"POV HOLDER")}</div></div>`}
         ${combinedTop ? `<div class="ceremony-arrow">▼</div>` : ""}
-        <div class="ceremony-role-section"><div class="ceremony-label">${combinedTop ? "FINAL NOMINEES" : (d.vetoUsed ? "FINAL NOMINEES" : "NOMINEES")}</div><div class="ceremony-players">${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div></div>
+        <div class="ceremony-role-section"><div class="ceremony-label">${combinedTop ? "FINAL NOMINEES" : (d.vetoUsed ? "FINAL NOMINEES" : "NOMINEES")}</div><div class="ceremony-players">${nominees.map(h=>card(h,"NOMINEE")).join("")}</div></div>
       </div>`;
     } else if (entry.type === "pov-players") {
       const hoh = byId(view, d.hohId);
@@ -217,34 +236,35 @@
       body += `<div class="pov-picked-layout">
         <div class="ceremony-role-section">
           <div class="ceremony-label">AUTOMATIC PLAYERS</div>
-          <div class="ceremony-players">${playerCard(hoh,"HOH")} ${nominees.map(h=>playerCard(h,"NOMINEE")).join("")}</div>
+          <div class="ceremony-players">${card(hoh,"HOH")} ${nominees.map(h=>card(h,"NOMINEE")).join("")}</div>
         </div>
         <div class="ceremony-arrow">+</div>
         <div class="ceremony-role-section">
           <div class="ceremony-label">POV PICKED PLAYERS</div>
-          <div class="ceremony-players">${picked.map(h=>playerCard(h,"PICKED")).join("")}</div>
+          <div class="ceremony-players">${picked.map(h=>card(h,"PICKED")).join("")}</div>
         </div>
       </div>`;
     } else if (entry.type === "veto") {
       const winnerId = d.winnerId || entry.winnerId || entry.competition?.winner?.id;
       const winner = byId(view, winnerId);
-      if (winner) body += `<div class="hero-players veto-winner-only">${playerCard(winner,"POV WINNER")}</div>`;
+      if (winner) body += `<div class="hero-players veto-winner-only">${card(winner,"POV WINNER")}</div>`;
     } else if (entry.type === "wildcard") {
       const winnerId = d.winnerId || entry.winnerId || entry.competition?.winner?.id;
       const winner = byId(view, winnerId);
-      if (winner) body += `<div class="hero-players wildcard-winner-only">${playerCard(winner,"WILDCARD WINNER")}</div>`;
+      if (winner) body += `<div class="hero-players wildcard-winner-only">${card(winner,"WILDCARD WINNER")}</div>`;
     } else if (players.length) {
       // HOH competitions must display every eligible houseguest. Older versions
       // limited the generic event renderer to eight cards, which incorrectly
       // hid half the cast in a 16-person season.
       const displayPlayers = entry.type === "hoh" ? players : players;
-      body += `<div class="hero-players ${entry.type === "hoh" ? "hoh-competition-players" : ""}">${displayPlayers.map(h=>playerCard(h,h.id===d.winnerId?"WINNER":"")).join("")}</div>`;
+      body += `<div class="hero-players ${entry.type === "hoh" ? "hoh-competition-players" : ""}">${displayPlayers.map(h=>card(h,h.id===d.winnerId?"WINNER":"")).join("")}</div>`;
     }
     return body;
   }
 
   function eventText(entry) {
-    const lines=(entry.lines||[]).map(x=>`<li>${esc(x)}</li>`).join("");
+    const fullFinal = entry.phase === "finale" || entry.type === "winner";
+    const lines=(entry.lines||[]).map(x=>`<li>${esc(fullFinal ? x : displayText(x))}</li>`).join("");
     return lines ? `<ul class="event-lines">${lines}</ul>` : "";
   }
   function renderEvent(index) {
@@ -312,7 +332,7 @@
     syncLiveFeedSetupToState();
     const cast=JSON.parse(JSON.stringify(state));
     state=GameState.createInitialState(BB23_CONFIG);
-    state.season={...state.season,...cast.season,liveFeedProfile:{...state.season.liveFeedProfile,...(cast.season?.liveFeedProfile||{})}};state.houseguests=cast.houseguests.map(h=>({...h,ratings:{general:50,physical:50,mental:50,social:50,strategic:50,...(h.ratings||{})}}));state.teams=cast.teams;state.relationships=cast.relationships;state.alliances=cast.alliances||[];
+    state.season={...state.season,...cast.season,liveFeedProfile:{...state.season.liveFeedProfile,...(cast.season?.liveFeedProfile||{})}};state.houseguests=cast.houseguests.map(h=>({...h,displayName:String(h.displayName||h.firstName||"").trim()||h.firstName||"",ratings:{general:50,physical:50,mental:50,social:50,strategic:50,...(h.ratings||{})}}));state.teams=cast.teams;state.relationships=cast.relationships;state.alliances=cast.alliances||[];
     SeasonEngine.simulateSeason(state,BB23_CONFIG);
     history=state.history||[];pointer=-1;localStorage.setItem(REVEAL_KEY,"-1");
     setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();
@@ -321,10 +341,10 @@
 
   function ratingControl(h,k){return `<label><span class="rating-label"><span>${esc(k)}</span><b>${h.ratings[k]}</b></span><input type="range" min="0" max="100" value="${h.ratings[k]}" data-id="${h.id}" data-rating="${k}"></label>`;}
   function renderCast(){
-    castGrid.innerHTML=state.houseguests.map(h=>`<article class="cast-card"><div class="setup-portrait">${portrait(h,"setup-img")}</div><div class="cast-body"><div class="cast-number">HOUSEGUEST ${String(h.slot).padStart(2,"0")}</div><div class="cast-name">${esc(name(h))}</div><label>First Name<input data-id="${h.id}" data-field="firstName" value="${esc(h.firstName)}"></label><label>Last Name<input data-id="${h.id}" data-field="lastName" value="${esc(h.lastName)}"></label><label>Gender<select data-id="${h.id}" data-field="gender"><option value="" ${!h.gender?"selected":""}>Not specified</option><option value="male" ${h.gender==="male"?"selected":""}>Male</option><option value="female" ${h.gender==="female"?"selected":""}>Female</option></select></label><label>Portrait URL<input data-id="${h.id}" data-field="portraitUrl" value="${esc(h.portraitUrl)}" placeholder="https://..."></label><div class="portrait-tools"><label class="upload-portrait">Upload Picture<input type="file" accept="image/*" data-id="${h.id}" data-portrait-upload></label>${h.portraitUrl?`<button type="button" class="clear-portrait" data-clear-portrait="${h.id}">Remove Picture</button>`:""}</div><small class="portrait-help">Use a URL or upload a JPG, PNG, WEBP, or GIF. Uploaded pictures are saved with the cast.</small><div class="rating-grid">${BB23_CONFIG.ratingKeys.map(k=>ratingControl(h,k)).join("")}</div></div></article>`).join("");
+    castGrid.innerHTML=state.houseguests.map(h=>`<article class="cast-card"><div class="setup-portrait">${portrait(h,"setup-img")}</div><div class="cast-body"><div class="cast-number">HOUSEGUEST ${String(h.slot).padStart(2,"0")}</div><div class="cast-name">${esc(name(h))}</div><label>First Name<input data-id="${h.id}" data-field="firstName" value="${esc(h.firstName)}"></label><label>Last Name<input data-id="${h.id}" data-field="lastName" value="${esc(h.lastName)}"></label><label>Display Name<input data-id="${h.id}" data-field="displayName" value="${esc(h.displayName||h.firstName||"")}" placeholder="First name or nickname"></label><label>Gender<select data-id="${h.id}" data-field="gender"><option value="" ${!h.gender?"selected":""}>Not specified</option><option value="male" ${h.gender==="male"?"selected":""}>Male</option><option value="female" ${h.gender==="female"?"selected":""}>Female</option></select></label><label>Portrait URL<input data-id="${h.id}" data-field="portraitUrl" value="${esc(h.portraitUrl)}" placeholder="https://..."></label><div class="portrait-tools"><label class="upload-portrait">Upload Picture<input type="file" accept="image/*" data-id="${h.id}" data-portrait-upload></label>${h.portraitUrl?`<button type="button" class="clear-portrait" data-clear-portrait="${h.id}">Remove Picture</button>`:""}</div><small class="portrait-help">Use a URL or upload a JPG, PNG, WEBP, or GIF. Uploaded pictures are saved with the cast.</small><div class="rating-grid">${BB23_CONFIG.ratingKeys.map(k=>ratingControl(h,k)).join("")}</div></div></article>`).join("");
   }
-  function renderTeams(){teamsGrid.innerHTML=state.teams.map(t=>`<div class="team"><h3>${esc(t.name)}</h3><div class="team-list">${t.memberIds.map(id=>byId(null,id)).filter(Boolean).map(h=>`<div class="team-player">${portrait(h,"mini-portrait")}${esc(name(h))}</div>`).join("")}</div></div>`).join("");}
-  function teamOptions(){return state.houseguests.map(h=>`<option value="${h.id}">${esc(name(h))}</option>`).join("");}
+  function renderTeams(){teamsGrid.innerHTML=state.teams.map(t=>`<div class="team"><h3>${esc(t.name)}</h3><div class="team-list">${t.memberIds.map(id=>byId(null,id)).filter(Boolean).map(h=>`<div class="team-player">${portrait(h,"mini-portrait")}${esc(displayName(h))}</div>`).join("")}</div></div>`).join("");}
+  function teamOptions(){return state.houseguests.map(h=>`<option value="${h.id}">${esc(displayName(h))}</option>`).join("");}
 
   function ensureRelationship(a,b){
     if(!state.relationships[a])state.relationships[a]={};
@@ -359,10 +379,10 @@
   function renderAlliancesSetup(){
     if(!allianceSetup)return;
     const alliances=state.alliances||[];
-    const memberPicker=state.houseguests.map(h=>`<label class="member-picker-card"><input type="checkbox" data-new-alliance-member="${h.id}"><span class="member-picker-portrait">${portrait(h,"alliance-picker-portrait")}</span><span>${esc(name(h))}</span></label>`).join("");
+    const memberPicker=state.houseguests.map(h=>`<label class="member-picker-card"><input type="checkbox" data-new-alliance-member="${h.id}"><span class="member-picker-portrait">${portrait(h,"alliance-picker-portrait")}</span><span>${esc(displayName(h))}</span></label>` ).join("");
     const typeOptions=ALLIANCE_TYPES.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");
     const customCards=alliances.filter(a=>a.custom).map(a=>{
-      const members=a.memberIds.map(id=>{const h=byId(null,id);return h?`<div class="setup-alliance-member">${portrait(h,"alliance-mini-portrait")}<span>${esc(name(h))}</span></div>`:""}).join("");
+      const members=a.memberIds.map(id=>{const h=byId(null,id);return h?`<div class="setup-alliance-member">${portrait(h,"alliance-mini-portrait")}<span>${esc(displayName(h))}</span></div>`:""}).join("");
       return `<div class="setup-alliance"><div><strong>${esc(a.name)}</strong><small>${esc(a.type||"Custom")} · ${a.memberIds.length} members</small></div><div class="setup-alliance-members">${members}</div><button type="button" data-remove-alliance="${a.id}" class="danger-link">Remove</button></div>`;
     }).join("");
     allianceSetup.innerHTML=`<div class="alliance-create"><label>Alliance Name<input id="newAllianceName" placeholder="e.g. The Cookout"></label><label>Alliance Type<select id="newAllianceType">${typeOptions}</select></label><div class="member-picker">${memberPicker}</div><button id="addAllianceBtn" class="primary">+ Create Alliance</button></div><div class="custom-alliance-list">${customCards||"<p class=\"muted-note\">No custom alliances yet. Simulated alliances may still form during the season.</p>"}</div>`;
@@ -401,13 +421,13 @@
   function refreshSetup(){renderCast();renderTeams();renderRelationships();renderAlliancesSetup();renderLiveFeedSetup();validate();$("seasonName").value=state.season.name;$("themeUrl").value=state.season.themeUrl||"";$("logoUrl").value=state.season.logoUrl||"";}
   function validate(){const ok=state.houseguests.every(h=>h.firstName.trim()&&h.lastName.trim());validity.textContent=ok?"Cast ready":"Names required";validity.classList.toggle("invalid",!ok);}
   function assignDemoTeams(){state.teams.forEach(t=>t.memberIds=[]);state.houseguests.forEach((h,i)=>{const t=state.teams[Math.floor(i/4)];h.teamId=t.id;t.memberIds.push(h.id);});}
-  function loadDemo(){state=GameState.createInitialState(BB23_CONFIG);state.season.name="Big Brother 23 — Custom Demo";state.houseguests.forEach((h,i)=>{[h.firstName,h.lastName]=demoNames[i];h.ratings.general=45+(i*7)%45;h.ratings.physical=40+(i*11)%55;h.ratings.mental=42+(i*13)%53;h.ratings.social=45+(i*9)%50;h.ratings.strategic=40+(i*17)%58;});assignDemoTeams();refreshSetup();toastMsg("Demo cast loaded.");}
+  function loadDemo(){state=GameState.createInitialState(BB23_CONFIG);state.season.name="Big Brother 23 — Custom Demo";state.houseguests.forEach((h,i)=>{[h.firstName,h.lastName]=demoNames[i];h.displayName=h.firstName;h.ratings.general=45+(i*7)%45;h.ratings.physical=40+(i*11)%55;h.ratings.mental=42+(i*13)%53;h.ratings.social=45+(i*9)%50;h.ratings.strategic=40+(i*17)%58;});assignDemoTeams();refreshSetup();toastMsg("Demo cast loaded.");}
   function refreshSetupPortrait(h){const card=castGrid.querySelector(`.cast-card input[data-id="${h.id}"]`)?.closest('.cast-card');const box=card?.querySelector('.setup-portrait');if(box)box.innerHTML=portrait(h,"setup-img");const tools=card?.querySelector('.portrait-tools');if(tools)tools.innerHTML=`${h.portraitUrl?`<button type="button" class="clear-portrait" data-clear-portrait="${h.id}">Remove Picture</button>`:""}`;}
   function handleCastEdit(e){
     const el=e.target;
     const h=state.houseguests.find(x=>x.id===el.dataset.id);
     if(!h)return;
-    if(el.dataset.field) h[el.dataset.field]=el.value;
+    if(el.dataset.field) { h[el.dataset.field]=el.value; if(el.dataset.field==="displayName" && !String(h.displayName||"").trim()) h.displayName=h.firstName||""; }
     if(el.dataset.rating){
       if(!h.ratings) h.ratings={general:50,physical:50,mental:50,social:50,strategic:50};
       h.ratings[el.dataset.rating]=Math.max(0,Math.min(100,Number(el.value)));
@@ -415,7 +435,7 @@
       if(label) label.textContent=String(h.ratings[el.dataset.rating]);
     }
     if(el.dataset.field==="portraitUrl") refreshSetupPortrait(h);
-    if(el.dataset.field==="firstName"||el.dataset.field==="lastName"){
+    if(el.dataset.field==="firstName"||el.dataset.field==="lastName"||el.dataset.field==="displayName"){
       const n=el.closest(".cast-card")?.querySelector(".cast-name"); if(n)n.textContent=name(h);
     }
     validate();
@@ -441,7 +461,7 @@
   $("loadDemoBtn").onclick=loadDemo;$("resetBtn").onclick=()=>{if(confirm("Reset the entire cast?")){state=GameState.createInitialState(BB23_CONFIG);refreshSetup();}};
   $("saveBtn").onclick=()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));toastMsg("Cast, relationships and alliances saved.");};
   $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb23-custom-season-v16.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
-  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");x.relationships=x.relationships||{};Object.values(x.relationships).forEach(row=>Object.values(row||{}).forEach(r=>{if(r&&!r.type)r.type="Unspecified";}));x.alliances=(x.alliances||[]).map(a=>({...a,type:a.type||"Custom"}));x.season=x.season||{};if(typeof x.season.liveFeedsEnabled!=="boolean")x.season.liveFeedsEnabled=true;x.season.liveFeedProfile={backstories:"",priorRelationships:"",personalities:"",conflictsAndRomance:"",recurringTopics:"",feedInstructions:"",...(x.season.liveFeedProfile||{})};state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
+  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");x.relationships=x.relationships||{};Object.values(x.relationships).forEach(row=>Object.values(row||{}).forEach(r=>{if(r&&!r.type)r.type="Unspecified";}));x.alliances=(x.alliances||[]).map(a=>({...a,type:a.type||"Custom"}));x.season=x.season||{};if(typeof x.season.liveFeedsEnabled!=="boolean")x.season.liveFeedsEnabled=true;x.season.liveFeedProfile={backstories:"",priorRelationships:"",personalities:"",conflictsAndRomance:"",recurringTopics:"",feedInstructions:"",...(x.season.liveFeedProfile||{})};x.houseguests.forEach(h=>{h.displayName=String(h.displayName||h.firstName||"").trim()||h.firstName||"";});state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
   $("simulateBtn").onclick=startSeason;$("resimulateBtn").onclick=startSeason;$("backToSetupBtn").onclick=resetSetup;
   previousBtn.onclick=previous;nextBtn.onclick=next;revealWeekBtn.onclick=revealWeek;revealSeasonBtn.onclick=()=>revealTo(history.length-1);
   timeline.addEventListener("click",e=>{const b=e.target.closest("button[data-index]");if(!b)return;const i=Number(b.dataset.index);if(i<=pointer+1)revealTo(i);});
@@ -452,7 +472,7 @@
     if(!raw){ for(const key of LEGACY_STORAGE_KEYS){ raw=localStorage.getItem(key); if(raw) break; } }
     if(!raw)return;
     const x=JSON.parse(raw); if(!x.houseguests)return;
-    state=x; state.intendedTarget=state.intendedTarget||null; state.targetHistory=state.targetHistory||[]; state.backdoorTargetId=state.backdoorTargetId||null;
+    x.houseguests.forEach(h=>{h.displayName=String(h.displayName||h.firstName||"").trim()||h.firstName||"";}); state=x; state.intendedTarget=state.intendedTarget||null; state.targetHistory=state.targetHistory||[]; state.backdoorTargetId=state.backdoorTargetId||null;
     history=state.history||[];
     const saved=Number(localStorage.getItem(REVEAL_KEY));
     if(history.length){pointer=Number.isFinite(saved)?saved:-1;setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();}
