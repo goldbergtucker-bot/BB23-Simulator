@@ -74,59 +74,132 @@
 
   /* ----------------------------- TEAMS -------------------------------- */
   function draftTeams(s){
-    // Preserve a complete custom team setup.  The previous version checked
-    // whether the teams were complete and then immediately erased memberIds,
-    // which made valid saved rosters look empty and prevented Team Safety and
-    // Wildcard from running.
-    const existing=s.teams.length===4&&s.teams.every(t=>Array.isArray(t.memberIds)&&t.memberIds.length===4&&t.memberIds.every(id=>hg(s,id)));
-    if(existing){
-      s.teams.forEach((t,i)=>{
-        t.name=TEAM_NAMES[i]||t.name;
-        t.memberIds=t.memberIds.slice(0,4);
-        const members=t.memberIds.map(id=>hg(s,id)).filter(Boolean);
-        const cap=hg(s,t.captainId)||members.find(p=>p.teamCaptain)||members.sort((a,b)=>b.ratings.general-a.ratings.general)[0];
-        members.forEach(p=>{p.teamId=t.id;p.teamCaptain=false;});
-        if(cap){cap.teamCaptain=true;t.captainId=cap.id;}
-      });
-      log(s,{week:0,phase:"premiere",type:"teams",title:"Move-In — Custom Team Rosters",participants:s.houseguests.map(h=>h.id),lines:s.teams.map(t=>`${t.name}: ${t.memberIds.map(id=>displayName(hg(s,id))).join(", ")} (Captain: ${displayName(hg(s,t.captainId))})`)});
-      return;
+    /*
+     * BB23 TEAM CAPTAINS / MOVE-IN TWIST
+     *
+     * The 16 houseguests move in as four groups of four:
+     *   - Group 1: four men
+     *   - Group 2: four men
+     *   - Group 3: four women
+     *   - Group 4: four women
+     *
+     * One winner from each group becomes a Team Captain.  That guarantees
+     * two male captains and two female captains.  Captains then draft three
+     * teammates, with the draft constrained so every finished team has
+     * exactly two men and two women.
+     *
+     * This is intentionally rebuilt on every simulation/resimulation.  A
+     * previous season's team assignments must never be reused as the opening
+     * move-in groups or final rosters.
+     */
+    s.teams=TEAM_NAMES.map((name,i)=>({
+      id: s.teams?.[i]?.id || name.toLowerCase(),
+      name,
+      colorClass: s.teams?.[i]?.colorClass || name.toLowerCase(),
+      captainId:null,
+      memberIds:[]
+    }));
+    s.houseguests.forEach(h=>{h.teamId=null;h.teamCaptain=false;h.safe=false;});
+
+    const men=shuffle(living(s).filter(p=>String(p.gender||'').toLowerCase()==='male')); 
+    const women=shuffle(living(s).filter(p=>String(p.gender||'').toLowerCase()==='female')); 
+    if(men.length!==8||women.length!==8){
+      throw new Error(`BB23 Team Captains requires exactly 8 male and 8 female houseguests. Found ${men.length} male and ${women.length} female.`);
     }
-    s.houseguests.forEach(h=>{h.teamId=null;h.teamCaptain=false;});
-    const pool=shuffle(living(s));
-    const groups=[];for(let i=0;i<4;i++)groups.push(pool.splice(0,4));
+
+    const groups=[men.slice(0,4),men.slice(4,8),women.slice(0,4),women.slice(4,8)];
+    const groupLabels=["Move-In Group 1 — Men","Move-In Group 2 — Men","Move-In Group 3 — Women","Move-In Group 4 — Women"];
     const captains=[];
+
     groups.forEach((group,i)=>{
-      const comp=C().runCompetition(group,{week:0,type:"team-captain",category:"general",label:`${TEAM_NAMES[i]} Captain Competition`,description:"Four houseguests compete for the right to become a Team Captain.",noiseMin:.9,noiseMax:1.1});
-      const cap=comp.winner;captains.push(cap);s.teams[i].captainId=cap.id;s.teams[i].memberIds=[cap.id];cap.teamId=s.teams[i].id;cap.teamCaptain=true;
-      log(s,{week:0,phase:"premiere",type:"team-captain",winnerId:cap.id,participants:group.map(p=>p.id),competition:comp,title:`${TEAM_NAMES[i]} Captain Competition`,lines:[`${displayName(cap)} wins the four-person competition and becomes the ${TEAM_NAMES[i]} Captain.`]});
+      const comp=C().runCompetition(group,{
+        week:0,
+        type:"team-captain",
+        category:"general",
+        label:`${TEAM_NAMES[i]} Captain Competition`,
+        description:`${groupLabels[i]}: four ${i<2?'men':'women'} compete for the right to become the ${TEAM_NAMES[i]} Team Captain.`,
+        noiseMin:.9,
+        noiseMax:1.1
+      });
+      const cap=comp.winner;
+      captains.push(cap);
+      s.teams[i].captainId=cap.id;
+      s.teams[i].memberIds=[cap.id];
+      cap.teamId=s.teams[i].id;
+      cap.teamCaptain=true;
+      log(s,{
+        week:0,
+        phase:"premiere",
+        type:"team-captain",
+        winnerId:cap.id,
+        participants:group.map(p=>p.id),
+        moveInGroup:i+1,
+        moveInGroupLabel:groupLabels[i],
+        competition:comp,
+        title:`${groupLabels[i]} — ${TEAM_NAMES[i]} Captain Competition`,
+        lines:[`${displayName(cap)} wins the ${groupLabels[i].toLowerCase()} competition and becomes the ${TEAM_NAMES[i]} Team Captain.`]
+      });
     });
-    let remaining=shuffle(living(s).filter(p=>!captains.includes(p)));
-    // Captains choose three teammates. A snake order prevents the first captain
-    // from receiving all of the strongest available players.
+
+    /*
+     * Draft exactly the genders each team needs.  Captains do not count as
+     * picks, so the two male-captain teams each need 1 woman + 2 men, while
+     * the two female-captain teams each need 1 man + 2 women.
+     */
+    const remaining=shuffle(living(s).filter(p=>!captains.some(c=>c.id===p.id)));
     let round=0;
     while(remaining.length){
       const order=round%2===0?s.teams:s.teams.slice().reverse();
       for(const t of order){
         if(t.memberIds.length>=4)continue;
         const members=t.memberIds.map(id=>hg(s,id));
-        const maleCount=members.filter(p=>p.gender==="male").length;
-        const femaleCount=members.filter(p=>p.gender==="female").length;
-        const preferredGender=maleCount>=2?"female":femaleCount>=2?"male":null;
-        const candidates=remaining.filter(p=>preferredGender&&p.gender?p.gender===preferredGender:true);
-        const pool=candidates.length?candidates:remaining;
+        const maleCount=members.filter(p=>String(p.gender||'').toLowerCase()==='male').length;
+        const femaleCount=members.filter(p=>String(p.gender||'').toLowerCase()==='female').length;
+        const needsGender=maleCount<2?'male':femaleCount<2?'female':null;
+        const candidates=remaining.filter(p=>needsGender===null||String(p.gender||'').toLowerCase()===needsGender);
+        if(!candidates.length)throw new Error(`Unable to complete ${t.name} as a 2-man/2-woman team.`);
+
         const captain=hg(s,t.captainId);
-        pool.sort((a,b)=>{
-          const sa=a.ratings.social*.4+a.ratings.strategic*.3+a.ratings.general*.2+a.ratings.physical*.1+(Math.random()*8-4);
-          const sb=b.ratings.social*.4+b.ratings.strategic*.3+b.ratings.general*.2+b.ratings.physical*.1+(Math.random()*8-4);
-          return sb-sa;
+        candidates.sort((a,b)=>{
+          const score=(p)=>relationshipScore(s,captain,p)+p.ratings.social*.25+p.ratings.strategic*.20+p.ratings.general*.10+(Math.random()*8-4);
+          return score(b)-score(a);
         });
-        const chosen=pool[0];
-        t.memberIds.push(chosen.id);chosen.teamId=t.id;remaining=remaining.filter(p=>p.id!==chosen.id);
-        log(s,{week:0,phase:"premiere",type:"team-draft",winnerId:chosen.id,participants:[captain.id,chosen.id],title:`${t.name} — Team Captain Draft Pick`,lines:[`${displayName(captain)} selects ${displayName(chosen)} for the ${t.name}.` ]});
+        const chosen=candidates[0];
+        t.memberIds.push(chosen.id);
+        chosen.teamId=t.id;
+        const idx=remaining.findIndex(p=>p.id===chosen.id);
+        if(idx>=0)remaining.splice(idx,1);
+        log(s,{
+          week:0,
+          phase:"premiere",
+          type:"team-draft",
+          winnerId:chosen.id,
+          participants:[captain.id,chosen.id],
+          teamId:t.id,
+          teamName:t.name,
+          title:`${t.name} — Team Captain Draft Pick`,
+          lines:[`${displayName(captain)} selects ${displayName(chosen)} for the ${t.name}.`]
+        });
       }
       round++;
     }
-    log(s,{week:0,phase:"premiere",type:"teams",title:"Teams Complete",participants:s.houseguests.map(h=>h.id),lines:s.teams.map(t=>`${t.name}: ${t.memberIds.map(id=>displayName(hg(s,id))).join(", ")} (Captain: ${displayName(hg(s,t.captainId))})`)});
+
+    /* Final safety check: every BB23 team must be exactly 2 men + 2 women. */
+    s.teams.forEach(t=>{
+      const members=t.memberIds.map(id=>hg(s,id));
+      const m=members.filter(p=>String(p.gender||'').toLowerCase()==='male').length;
+      const f=members.filter(p=>String(p.gender||'').toLowerCase()==='female').length;
+      if(m!==2||f!==2)throw new Error(`${t.name} did not finish 2 men and 2 women.`);
+    });
+
+    log(s,{
+      week:0,
+      phase:"premiere",
+      type:"teams",
+      participants:s.houseguests.map(h=>h.id),
+      title:"Teams Complete — BB23 Move-In",
+      lines:s.teams.map(t=>`${t.name}: ${t.memberIds.map(id=>displayName(hg(s,id))).join(", ")} (Captain: ${displayName(hg(s,t.captainId))})`)
+    });
   }
 
   /* ------------------------ HIGH ROLLER ECONOMY ------------------------- */
@@ -329,7 +402,7 @@
   function runFinale(s){s.week="Final";s.phase="finale";const three=living(s);if(three.length!==3)return;const p1=C().runCompetition(three,{week:12,type:"final-hoh-1"});log(s,{week:"Final",phase:"finale",type:"final3-part1",winnerId:p1.winner.id,participants:three.map(p=>p.id),competition:p1,title:`Final HOH Part 1 — ${p1.label}`,lines:[`${displayName(p1.winner)} wins Part 1 and advances.`]});const rem=three.filter(p=>p.id!==p1.winner.id);const p2=C().runCompetition(rem,{week:12,type:"final-hoh-2"});log(s,{week:"Final",phase:"finale",type:"final3-part2",winnerId:p2.winner.id,participants:rem.map(p=>p.id),competition:p2,title:`Final HOH Part 2 — ${p2.label}`,lines:[`${displayName(p2.winner)} wins Part 2.`]});const p3=C().runCompetition([p1.winner,p2.winner],{week:12,type:"final-hoh-3"});const finalHoh=p3.winner;const other=three.filter(p=>p.id!==finalHoh.id);const chosen=R().decideFinalTwoPick(s,finalHoh,other);const third=other.find(p=>p.id!==chosen.id);log(s,{week:"Final",phase:"finale",type:"final3-part3",winnerId:finalHoh.id,participants:[p1.winner.id,p2.winner.id],competition:p3,title:`Final HOH Part 3 — ${p3.label}`,lines:[`${displayName(finalHoh)} wins Part 3 and becomes the final HOH.`]});third.active=false;third.evicted=true;third.placement=3;third.juryMember=true;if(!s.jury.includes(third.id))s.jury.push(third.id);s.evicted.push(third.id);s.currentHOH=finalHoh.id;log(s,{week:"Final",phase:"finale",type:"final-decision",hohId:finalHoh.id,thirdPlaceId:third.id,finalistIds:[finalHoh.id,chosen.id],title:"Final HOH's Decision",lines:[`${displayName(finalHoh)} takes ${displayName(chosen)} to the Final 2 and evicts ${displayName(third)}.`,`${displayName(third)} finishes in 3rd place and joins the jury.`]});const finalists=[finalHoh,chosen],jurors=s.jury.map(id=>hg(s,id)).filter(Boolean),tally={[finalists[0].id]:0,[finalists[1].id]:0};s._juryVotes=[];jurors.forEach(j=>{const vote=R().decideJuryVote(s,j,finalists[0],finalists[1]);tally[vote]++;s._juryVotes.push({voterId:j.id,targetId:vote});});log(s,{week:"Final",phase:"finale",type:"jury-vote",votes:s._juryVotes,finalistIds:finalists.map(p=>p.id),title:"The Jury Votes",lines:s._juryVotes.map(v=>`${displayName(hg(s,v.voterId))} votes for ${displayName(hg(s,v.targetId))}.`)});const winnerId=tally[finalists[0].id]>=tally[finalists[1].id]?finalists[0].id:finalists[1].id;const runnerId=winnerId===finalists[0].id?finalists[1].id:finalists[0].id;hg(s,winnerId).placement=1;hg(s,runnerId).placement=2;hg(s,winnerId).active=false;hg(s,runnerId).active=false;s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000};s.phase="complete";log(s,{week:"Final",phase:"finale",type:"winner",winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`Prize structure: Winner $750,000 · Runner-up $75,000 · America's Favorite $50,000.`]});}
 
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.evictionVotes=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.secretHOH=null;s.dethronedHOH=null;s.finale=null;s.bbBucks={};s.powers=[];s.coinState=null;s._playedHighRollerWeeks={};s.season.evictionCount=0;s.houseguests.forEach(h=>{h.active=true;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.placement=null;h.teamCaptain=!!h.teamCaptain;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.evictionVotes=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.secretHOH=null;s.dethronedHOH=null;s.finale=null;s.bbBucks={};s.powers=[];s.coinState=null;s._playedHighRollerWeeks={};s.season.evictionCount=0;s.teams=config.teams.map(t=>({id:t.id,name:t.name,colorClass:t.colorClass||t.id,captainId:null,memberIds:[]}));s.houseguests.forEach(h=>{h.active=true;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.placement=null;h.teamId=null;h.teamCaptain=false;});
     runPremiere(s,config);let week=1;let guard=0;while(living(s).length>3&&week<=30&&guard<30){runCycle(s,config,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};
