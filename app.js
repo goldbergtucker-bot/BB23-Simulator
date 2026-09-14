@@ -174,7 +174,8 @@
         const stayId = nomineeIds.find(id => id !== evicted?.id);
         b = stayId ? Number(counts[stayId] || 0) : 0;
       }
-      body += `<div class="eviction-result">${evicted ? playerCard(evicted,"EVICTED") : ""}<div class="eviction-vote-count">By a vote of <strong>${a} to ${b}</strong>, ${esc(name(evicted))}, you have been evicted.</div></div>`;
+      const tieBreaker= d.tieBreakVoteId ? byId(view,d.tieBreakVoteId) : null;
+      body += `<div class="eviction-result">${evicted ? playerCard(evicted,"EVICTED") : ""}<div class="eviction-vote-count">By a vote of <strong>${a} to ${b}</strong>, ${esc(name(evicted))}, you have been evicted.${tieBreaker ? ` <div class="tie-break-note"><strong>HOH TIE-BREAKER:</strong> ${esc(name(tieBreaker))} was evicted by ${esc(name(byId(view,d.hohId)))}.</div>` : ""}</div></div>`;
       return body;
     }
     const players = findPlayers(entry,view);
