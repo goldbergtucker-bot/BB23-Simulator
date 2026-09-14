@@ -47,6 +47,15 @@
     d.winnerId=e.winnerId||d.winnerId||null;d.hohId=e.hohId||d.hohId||s.currentHOH||null;d.evictedId=e.evictedId||d.evictedId||null;
     if(e.type==="teams")d.teams=JSON.parse(JSON.stringify(s.teams));
     if(e.type==="eviction-voting")d.votes=(s.evictionVotes||[]).map(v=>({...v})),d.voterIds=d.votes.map(v=>v.voterId);
+    if(e.type==="eviction") {
+      // Preserve the actual vote tally on the event record.  The engine already
+      // calculates these counts correctly, but the UI reads event.data rather
+      // than the top-level event object.  Without copying them here, the UI
+      // falls back to 0/0 even when the individual votes were split correctly.
+      d.voteCounts={...(e.voteCounts||d.voteCounts||{})};
+      d.evictedVoteCount=Number(e.evictedVoteCount ?? d.evictedVoteCount ?? 0);
+      d.stayVoteCount=Number(e.stayVoteCount ?? d.stayVoteCount ?? 0);
+    }
     if(e.type==="jury-vote")d.votes=(s._juryVotes||[]).map(v=>({...v})),d.voterIds=d.votes.map(v=>v.voterId),d.finalistIds=living(s).map(h=>h.id);
     if(e.type==="final-decision")d.finalistIds=living(s).map(h=>h.id);
     return d;
