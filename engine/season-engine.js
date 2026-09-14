@@ -46,8 +46,7 @@
     d.participants=ids(e.participants||d.participants);d.nomineeIds=ids(e.nomineeIds||d.nomineeIds||s.nominees);d.povPlayers=ids(e.povPlayers||d.povPlayers||s.povPlayers);
     d.winnerId=e.winnerId||d.winnerId||null;d.hohId=e.hohId||d.hohId||s.currentHOH||null;d.evictedId=e.evictedId||d.evictedId||null;
     if(e.type==="teams")d.teams=JSON.parse(JSON.stringify(s.teams));
-    if(e.type==="eviction-voting"){d.votes=(e.votes||s.evictionVotes||[]).map(v=>({...v}));d.voterIds=d.votes.map(v=>v.voterId);}
-    if(e.type==="eviction"){d.voteCounts={...(e.voteCounts||{})};d.evictedVoteCount=Number(e.evictedVoteCount||0);d.stayVoteCount=Number(e.stayVoteCount||0);d.nomineeIds=ids(e.nomineeIds||s.nominees);}
+    if(e.type==="eviction-voting")d.votes=(s.evictionVotes||[]).map(v=>({...v})),d.voterIds=d.votes.map(v=>v.voterId);
     if(e.type==="jury-vote")d.votes=(s._juryVotes||[]).map(v=>({...v})),d.voterIds=d.votes.map(v=>v.voterId),d.finalistIds=living(s).map(h=>h.id);
     if(e.type==="final-decision")d.finalistIds=living(s).map(h=>h.id);
     return d;
@@ -292,22 +291,7 @@
   }
   function evictionCycle(s,week,cycle=1){
     if(s.nominees.length<2){const hoh=hg(s,s.currentHOH);const fill=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!s.nominees.includes(p.id));while(s.nominees.length<2&&fill.length){const p=fill.shift();p.nominated=true;s.nominees.push(p.id);}}
-    const noms=s.nominees.map(id=>hg(s,id)).filter(Boolean).slice(0,2);s.nominees=noms.map(n=>n.id);const hoh=hg(s,s.currentHOH);const nomineeIds=new Set(noms.map(n=>n.id));const voters=living(s).filter(p=>p.id!==hoh.id&&!nomineeIds.has(p.id));const counts={[noms[0].id]:0,[noms[1].id]:0};s.evictionVotes=[];voters.forEach(v=>{let out=R().decideVote(s,v,noms[0],noms[1],hoh);if(!(out in counts))out=noms[0].id;counts[out]++;s.evictionVotes.push({voterId:v.id,targetId:out});});
-    // Prevent a broken/flat relationship setup from forcing every vote to the
-    // same nominee. If two or more people vote, at least one vote should be
-    // capable of breaking from the majority. The voter whose decision was
-    // closest gets flipped, preserving the normal social-AI result whenever
-    // there is already a split vote.
-    if(voters.length>=2 && (counts[noms[0].id]===0 || counts[noms[1].id]===0)){
-      const fromId=counts[noms[0].id]===0?noms[1].id:noms[0].id;
-      const toId=counts[noms[0].id]===0?noms[0].id:noms[1].id;
-      const candidateVotes=s.evictionVotes.filter(v=>v.targetId===fromId);
-      if(candidateVotes.length){
-        const scored=candidateVotes.map(v=>{const voter=hg(s,v.voterId);const a=R().bondScore(s,voter.id,noms[0].id);const b=R().bondScore(s,voter.id,noms[1].id);return {v,margin:Math.abs(a-b)};}).sort((x,y)=>x.margin-y.margin);
-        scored[0].v.targetId=toId;counts[fromId]--;counts[toId]++;
-      }
-    }
-    const evictedId=counts[noms[0].id]>=counts[noms[1].id]?noms[0].id:noms[1].id;const evicted=hg(s,evictedId);const stay=noms.find(n=>n.id!==evictedId);log(s,{week,phase:cycle>1?"double-eviction":"standard",type:"eviction-voting",nomineeIds:s.nominees,voterIds:voters.map(v=>v.id),votes:s.evictionVotes,title:`${cycle>1?"Double Eviction — ":""}Eviction Vote`,lines:s.evictionVotes.map(v=>`${displayName(hg(s,v.voterId))} votes to evict ${displayName(hg(s,v.targetId))}.`)});
+    const noms=s.nominees.map(id=>hg(s,id)).filter(Boolean).slice(0,2);s.nominees=noms.map(n=>n.id);const hoh=hg(s,s.currentHOH);const voters=living(s).filter(p=>p.id!==hoh.id&&!noms.includes(p));const counts={[noms[0].id]:0,[noms[1].id]:0};s.evictionVotes=[];voters.forEach(v=>{let out=R().decideVote(s,v,noms[0],noms[1],hoh);if(!counts[out])out=noms[0].id;counts[out]++;s.evictionVotes.push({voterId:v.id,targetId:out});});const evictedId=counts[noms[0].id]>=counts[noms[1].id]?noms[0].id:noms[1].id;const evicted=hg(s,evictedId);const stay=noms.find(n=>n.id!==evictedId);log(s,{week,phase:cycle>1?"double-eviction":"standard",type:"eviction-voting",nomineeIds:s.nominees,voterIds:voters.map(v=>v.id),votes:s.evictionVotes,title:`${cycle>1?"Double Eviction — ":""}Eviction Vote`,lines:s.evictionVotes.map(v=>`${displayName(hg(s,v.voterId))} votes to evict ${displayName(hg(s,v.targetId))}.`)});
     evicted.active=false;evicted.evicted=true;s.season.evictionCount++;evicted.placement=s.season.castSize-s.season.evictionCount+1;const juryThreshold=11;if(evicted.placement<=juryThreshold&&!s.jury.includes(evicted.id)){evicted.juryMember=true;s.jury.push(evicted.id);}s.evicted.push(evicted.id);
     log(s,{week,phase:cycle>1?"double-eviction":"standard",type:"eviction",evictedId:evicted.id,voteCounts:counts,evictedVoteCount:counts[evicted.id],stayVoteCount:counts[stay.id],nomineeIds:s.nominees,title:"Eviction",lines:[`By a vote of ${counts[evicted.id]} to ${counts[stay.id]}, ${displayName(evicted)}, you have been evicted.`,evicted.juryMember?`${displayName(evicted)} joins the jury.`:`${displayName(evicted)} finishes in ${ordinal(evicted.placement)} place.`]});
     s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.evictionVotes=[];return evicted;
@@ -337,7 +321,7 @@
 
   function simulateSeason(s,config){
     ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.evictionVotes=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.secretHOH=null;s.dethronedHOH=null;s.finale=null;s.bbBucks={};s.powers=[];s.coinState=null;s._playedHighRollerWeeks={};s.season.evictionCount=0;s.houseguests.forEach(h=>{h.active=true;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.placement=null;h.teamCaptain=!!h.teamCaptain;});
-    runPremiere(s,config);let week=1;let guard=0;while(living(s).length>3&&week<=30&&guard<30){runCycle(s,config,week,1);week++;guard++;}runFinale(s);return s;
+    runPremiere(s,config);let week=1;let guard=0;while(living(s).length>3&&week<=30&&guard<30){runCycle(s,config,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};
 })();
