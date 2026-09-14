@@ -82,7 +82,16 @@
         originalYear: config.originalYear,
         name: "Big Brother 23 — Custom Cast",
         themeUrl: "",
-        logoUrl: ""
+        logoUrl: "",
+        liveFeedsEnabled: true,
+        liveFeedProfile: {
+          backstories: "",
+          priorRelationships: "",
+          personalities: "",
+          conflictsAndRomance: "",
+          recurringTopics: "",
+          feedInstructions: ""
+        }
       },
 
       phase: "setup",
