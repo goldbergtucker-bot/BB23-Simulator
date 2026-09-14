@@ -27,6 +27,8 @@
   const demoNames = [["Tucker","Player"],["Grace","Player"],["Antonio","Player"],["Riley","Player"],["Aly","Player"],["Stephanie","Player"],["Jordan","Player"],["Morgan","Player"],["Cameron","Player"],["Taylor","Player"],["Alex","Player"],["Casey","Player"],["Drew","Player"],["Jamie","Player"],["Logan","Player"],["Parker","Player"]];
   const REL_KEYS = ["friendship","trust","loyalty","rivalry","respect","attraction"];
   const REL_LABELS = {friendship:"Friendship",trust:"Trust",loyalty:"Loyalty",rivalry:"Rivalry",respect:"Respect",attraction:"Attraction"};
+  const REL_TYPES = ["Unspecified","Showmance","Bromance","Best Friends","Close Friends","Allies","Rivalry","Mentor / Mentee","Family","Frenemies","Secret Pair","Other"];
+  const ALLIANCE_TYPES = ["Majority Alliance","Core Alliance","Final Two","Final Three","Girls' Alliance","Guys' Alliance","Secret Alliance","Side Alliance","Team","Custom"];
 
   const esc = v => String(v ?? "").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
   const name = h => `${h?.firstName||""} ${h?.lastName||""}`.trim() || `Houseguest ${h?.slot||""}`;
@@ -261,7 +263,7 @@
   function renderAlliances(){
     const a=state.alliances||[];
     const relationshipNote=state.season.relationshipsCustomized?"Custom starting relationships are active.":"Starting relationships are randomized when you simulate.";
-    tabContent.innerHTML=`<div class="tab-panel"><h2>Alliances & Relationships</h2><p class="muted-note">${relationshipNote}</p>${a.length?a.map(x=>`<div class="alliance-card"><div class="alliance-heading"><div><h3>${esc(x.name)}</h3><small>${x.custom?"CUSTOM SETUP":"SIMULATED"}</small></div><span>${x.memberIds.length} members</span></div><div class="alliance-members">${x.memberIds.map(id=>{const h=byId(null,id);return playerCard(h)}).join("")}</div></div>`).join(""):"<p>No alliances have formed yet.</p>"}</div>`;
+    tabContent.innerHTML=`<div class="tab-panel"><h2>Alliances & Relationships</h2><p class="muted-note">${relationshipNote}</p>${a.length?a.map(x=>`<div class="alliance-card"><div class="alliance-heading"><div><h3>${esc(x.name)}</h3><small>${esc(x.type|| (x.custom?"Custom":"Simulated"))}</small></div><span>${x.memberIds.length} members</span></div><div class="alliance-members">${x.memberIds.map(id=>{const h=byId(null,id);return playerCard(h)}).join("")}</div></div>`).join(""):"<p>No alliances have formed yet.</p>"}</div>`;
   }
   function renderTab(){
     if(activeTab==="stats")renderStats(); else if(activeTab==="alliances")renderAlliances(); else {tabContent.innerHTML="";tabContent.classList.add("hidden");return;} tabContent.classList.remove("hidden");
@@ -300,6 +302,7 @@
   function ensureRelationship(a,b){
     if(!state.relationships[a])state.relationships[a]={};
     if(!state.relationships[a][b])state.relationships[a][b]=GameState.emptyRelationships();
+    if(!state.relationships[a][b].type)state.relationships[a][b].type="Unspecified";
     return state.relationships[a][b];
   }
   function renderRelationships(){
@@ -310,9 +313,16 @@
     const currentB=relationshipsGrid.dataset.b&&ids.includes(relationshipsGrid.dataset.b)&&relationshipsGrid.dataset.b!==currentA?relationshipsGrid.dataset.b:(ids[1]===currentA?ids[0]:ids[1]);
     relationshipsGrid.dataset.a=currentA;relationshipsGrid.dataset.b=currentB;
     const r=ensureRelationship(currentA,currentB);
-    relationshipsGrid.innerHTML=`<div class="relationship-editor"><div class="relationship-selects"><label>Houseguest A<select data-rel-a>${teamOptions()}</select></label><label>Houseguest B<select data-rel-b>${teamOptions()}</select></label></div><label class="relationship-check"><input type="checkbox" data-rel-both checked> Apply values to both directions</label><div class="relationship-sliders">${REL_KEYS.map(k=>`<label><span>${REL_LABELS[k]} <b data-rel-value="${k}">${r[k]}</b></span><input type="range" min="0" max="100" value="${r[k]}" data-rel-key="${k}"></label>`).join("")}</div><p class="relationship-help">Set the starting social relationship between these two houseguests. Higher rivalry means more hostility; higher trust/loyalty makes alliance behavior more likely.</p></div>`;
+    const typeOptions=REL_TYPES.map(t=>`<option value="${esc(t)}" ${r.type===t?"selected":""}>${esc(t)}</option>`).join("");
+    const a=byId(null,currentA),b=byId(null,currentB);
+    relationshipsGrid.innerHTML=`<div class="relationship-editor"><div class="relationship-pair-preview"><div class="relationship-person">${portrait(a,"relationship-portrait")}<strong>${esc(name(a))}</strong></div><div class="relationship-connector">↔</div><div class="relationship-person">${portrait(b,"relationship-portrait")}<strong>${esc(name(b))}</strong></div></div><div class="relationship-selects"><label>Houseguest A<select data-rel-a>${teamOptions()}</select></label><label>Houseguest B<select data-rel-b>${teamOptions()}</select></label></div><label class="relationship-type-field">Relationship Type<select data-rel-type>${typeOptions}</select></label><label class="relationship-check"><input type="checkbox" data-rel-both checked> Apply values to both directions</label><div class="relationship-sliders">${REL_KEYS.map(k=>`<label><span>${REL_LABELS[k]} <b data-rel-value="${k}">${r[k]}</b></span><input type="range" min="0" max="100" value="${r[k]}" data-rel-key="${k}"></label>`).join("")}</div><p class="relationship-help">Choose a relationship type such as Showmance, Bromance, Best Friends or Rivalry, then fine-tune the six relationship ratings. The type is saved with the relationship and can influence how the relationship is presented.</p></div>`;
     const aSel=relationshipsGrid.querySelector('[data-rel-a]'),bSel=relationshipsGrid.querySelector('[data-rel-b]');
     aSel.value=currentA;bSel.value=currentB;
+  }
+  function setRelationshipType(a,b,type,both){
+    const r=ensureRelationship(a,b);r.type=type;
+    if(both){const rr=ensureRelationship(b,a);rr.type=type;}
+    state.season.relationshipsCustomized=true;
   }
   function setRelationshipPair(a,b,key,value,both){
     const r=ensureRelationship(a,b);r[key]=Number(value);
@@ -322,19 +332,21 @@
   function renderAlliancesSetup(){
     if(!allianceSetup)return;
     const alliances=state.alliances||[];
-    const memberPicker=state.houseguests.map(h=>`<label><input type="checkbox" data-new-alliance-member="${h.id}">${esc(name(h))}</label>`).join("");
+    const memberPicker=state.houseguests.map(h=>`<label class="member-picker-card"><input type="checkbox" data-new-alliance-member="${h.id}"><span class="member-picker-portrait">${portrait(h,"alliance-picker-portrait")}</span><span>${esc(name(h))}</span></label>`).join("");
+    const typeOptions=ALLIANCE_TYPES.map(t=>`<option value="${esc(t)}">${esc(t)}</option>`).join("");
     const customCards=alliances.filter(a=>a.custom).map(a=>{
-      const members=a.memberIds.map(id=>esc(name(byId(null,id)))).join(", ");
-      return `<div class="setup-alliance"><div><strong>${esc(a.name)}</strong><small>${a.memberIds.length} members</small></div><div class="setup-alliance-members">${members}</div><button type="button" data-remove-alliance="${a.id}" class="danger-link">Remove</button></div>`;
+      const members=a.memberIds.map(id=>{const h=byId(null,id);return h?`<div class="setup-alliance-member">${portrait(h,"alliance-mini-portrait")}<span>${esc(name(h))}</span></div>`:""}).join("");
+      return `<div class="setup-alliance"><div><strong>${esc(a.name)}</strong><small>${esc(a.type||"Custom")} · ${a.memberIds.length} members</small></div><div class="setup-alliance-members">${members}</div><button type="button" data-remove-alliance="${a.id}" class="danger-link">Remove</button></div>`;
     }).join("");
-    allianceSetup.innerHTML=`<div class="alliance-create"><label>Alliance Name<input id="newAllianceName" placeholder="e.g. The Cookout"></label><div class="member-picker">${memberPicker}</div><button id="addAllianceBtn" class="primary">+ Create Alliance</button></div><div class="custom-alliance-list">${customCards||"<p class=\"muted-note\">No custom alliances yet. Simulated alliances may still form during the season.</p>"}</div>`;
+    allianceSetup.innerHTML=`<div class="alliance-create"><label>Alliance Name<input id="newAllianceName" placeholder="e.g. The Cookout"></label><label>Alliance Type<select id="newAllianceType">${typeOptions}</select></label><div class="member-picker">${memberPicker}</div><button id="addAllianceBtn" class="primary">+ Create Alliance</button></div><div class="custom-alliance-list">${customCards||"<p class=\"muted-note\">No custom alliances yet. Simulated alliances may still form during the season.</p>"}</div>`;
     $("addAllianceBtn")?.addEventListener("click",()=>{
       const allianceName=$("newAllianceName").value.trim();
+      const allianceType=$("newAllianceType").value;
       const memberIds=[...allianceSetup.querySelectorAll('[data-new-alliance-member]:checked')].map(x=>x.dataset.newAllianceMember);
       if(!allianceName){toastMsg("Enter an alliance name.");return;}
       if(memberIds.length<2){toastMsg("Choose at least two members.");return;}
       const id=`custom-alliance-${Date.now()}`;
-      const a={id,name:allianceName,memberIds,formedWeek:0,active:true,custom:true};
+      const a={id,name:allianceName,type:allianceType,memberIds,formedWeek:0,active:true,custom:true};
       state.alliances.push(a);
       memberIds.forEach(id=>{const h=byId(null,id);if(h&&!h.allianceIds.includes(a.id))h.allianceIds.push(a.id);});
       renderAlliancesSetup();toastMsg(`${allianceName} created.`);
@@ -374,6 +386,7 @@
   relationshipsGrid?.addEventListener("change",e=>{
     const aSel=relationshipsGrid.querySelector('[data-rel-a]'),bSel=relationshipsGrid.querySelector('[data-rel-b]');
     if(e.target.matches('[data-rel-a],[data-rel-b]')){if(aSel.value===bSel.value){toastMsg("Choose two different houseguests.");return;}relationshipsGrid.dataset.a=aSel.value;relationshipsGrid.dataset.b=bSel.value;renderRelationships();return;}
+    if(e.target.matches('[data-rel-type]')){const both=relationshipsGrid.querySelector('[data-rel-both]')?.checked;setRelationshipType(aSel.value,bSel.value,e.target.value,both);return;}
   });
   relationshipsGrid?.addEventListener("input",e=>{
     if(!e.target.matches('[data-rel-key]'))return;const a=relationshipsGrid.dataset.a,b=relationshipsGrid.dataset.b,both=relationshipsGrid.querySelector('[data-rel-both]')?.checked;setRelationshipPair(a,b,e.target.dataset.relKey,e.target.value,both);const out=relationshipsGrid.querySelector(`[data-rel-value="${e.target.dataset.relKey}"]`);if(out)out.textContent=e.target.value;
@@ -383,7 +396,7 @@
   $("loadDemoBtn").onclick=loadDemo;$("resetBtn").onclick=()=>{if(confirm("Reset the entire cast?")){state=GameState.createInitialState(BB23_CONFIG);refreshSetup();}};
   $("saveBtn").onclick=()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));toastMsg("Cast, relationships and alliances saved.");};
   $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb23-custom-season-v16.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
-  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");x.relationships=x.relationships||{};x.alliances=x.alliances||[];x.season=x.season||{};state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
+  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");x.relationships=x.relationships||{};Object.values(x.relationships).forEach(row=>Object.values(row||{}).forEach(r=>{if(r&&!r.type)r.type="Unspecified";}));x.alliances=(x.alliances||[]).map(a=>({...a,type:a.type||"Custom"}));x.season=x.season||{};state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
   $("simulateBtn").onclick=startSeason;$("resimulateBtn").onclick=startSeason;$("backToSetupBtn").onclick=resetSetup;
   previousBtn.onclick=previous;nextBtn.onclick=next;revealWeekBtn.onclick=revealWeek;revealSeasonBtn.onclick=()=>revealTo(history.length-1);
   timeline.addEventListener("click",e=>{const b=e.target.closest("button[data-index]");if(!b)return;const i=Number(b.dataset.index);if(i<=pointer+1)revealTo(i);});
