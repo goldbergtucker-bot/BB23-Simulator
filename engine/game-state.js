@@ -24,7 +24,8 @@
       loyalty: 50,
       rivalry: 0,
       respect: 50,
-      attraction: 0
+      attraction: 0,
+      type: "Unspecified"
     };
   }
 
