@@ -32,7 +32,7 @@
 
   function snapshot(s){return {
     phase:s.phase,week:s.week,currentHOH:s.currentHOH,originalHOH:s.originalHOH||null,secretHOH:s.secretHOH||null,dethronedHOH:s.dethronedHOH||null,
-    nominees:(s.nominees||[]).slice(),intendedTarget:s.intendedTarget||null,targetHistory:(s.targetHistory||[]).slice(),backdoorTargetId:s.backdoorTargetId||null,
+    nominees:(s.nominees||[]).slice(),intendedTarget:s.intendedTarget||null,targetHistory:(s.targetHistory||[]).slice(),backdoorTargetId:s.backdoorTargetId||null,backdoorPlanActive:!!s.backdoorPlanActive,
     povPlayers:(s.povPlayers||[]).slice(),vetoWinners:(s.vetoWinners||[]).slice(),evictionVotes:(s.evictionVotes||[]).slice(),evicted:(s.evicted||[]).slice(),jury:(s.jury||[]).slice(),
     bbBucks:{...(s.bbBucks||{})},powers:JSON.parse(JSON.stringify(s.powers||[])),teams:JSON.parse(JSON.stringify(s.teams||[])),
     houseguests:s.houseguests.map(h=>({id:h.id,slot:h.slot,firstName:h.firstName,lastName:h.lastName,portraitUrl:h.portraitUrl,gender:h.gender||"",teamId:h.teamId,active:h.active,safe:h.safe,nominated:h.nominated,juryMember:h.juryMember,evicted:h.evicted,placement:h.placement,teamCaptain:!!h.teamCaptain})),
@@ -53,6 +53,7 @@
       // than the top-level event object.  Without copying them here, the UI
       // falls back to 0/0 even when the individual votes were split correctly.
       d.voteCounts={...(e.voteCounts||d.voteCounts||{})};
+      d.tieBreakVoteId=e.tieBreakVoteId||d.tieBreakVoteId||null;
       d.evictedVoteCount=Number(e.evictedVoteCount ?? d.evictedVoteCount ?? 0);
       d.stayVoteCount=Number(e.stayVoteCount ?? d.stayVoteCount ?? 0);
     }
@@ -66,7 +67,7 @@
   function ensureState(s){
     s.bbBucks=s.bbBucks||{};s.powers=Array.isArray(s.powers)?s.powers:[];s.evicted=Array.isArray(s.evicted)?s.evicted:[];s.jury=Array.isArray(s.jury)?s.jury:[];
     s.nominees=s.nominees||[];s.povPlayers=s.povPlayers||[];s.vetoWinners=s.vetoWinners||[];s.evictionVotes=s.evictionVotes||[];s.teams=s.teams||[];s.history=s.history||[];
-    s.coinState=s.coinState||null;s._playedHighRollerWeeks=s._playedHighRollerWeeks||{};s._wildcardPlayed=s._wildcardPlayed||{};s._week2BonusTeamSafety=s._week2BonusTeamSafety||null;s._week8EnvelopesAwarded=!!s._week8EnvelopesAwarded;
+    s.coinState=s.coinState||null;s.backdoorPlanActive=!!s.backdoorPlanActive;s._playedHighRollerWeeks=s._playedHighRollerWeeks||{};s._wildcardPlayed=s._wildcardPlayed||{};s._week2BonusTeamSafety=s._week2BonusTeamSafety||null;s._week8EnvelopesAwarded=!!s._week8EnvelopesAwarded;
     s.houseguests.forEach(h=>{h.gender=h.gender||"";h.teamCaptain=!!h.teamCaptain;h.allianceIds=h.allianceIds||[];h.ratings=h.ratings||{general:50,physical:50,mental:50,social:50,strategic:50};});
   }
 
@@ -386,12 +387,32 @@
 
   /* ---------------------------- NOMINATIONS ---------------------------- */
   function chooseNominees(s,hoh){let pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe);if(pool.length<2)pool=living(s).filter(p=>p.id!==hoh.id);return (R()?.pickNominees?safePickNominees():shuffle(pool).slice(0,2));function safePickNominees(){try{return R().pickNominees(s,hoh,pool,Math.min(2,pool.length));}catch(e){return shuffle(pool).slice(0,2);}}}
-  function planTarget(s,hoh,noms){const ranked=noms.map(p=>({p,score:relationshipScore(s,hoh,p)})).sort((a,b)=>a.score-b.score);const target=ranked[0]?.p;const back= living(s).filter(p=>p.id!==hoh.id&&!noms.includes(p)&&!p.safe).sort((a,b)=>relationshipScore(s,hoh,a)-relationshipScore(s,hoh,b))[0];return {text:target?displayName(target):null,back};}
-  function runNominations(s,week){const hoh=hg(s,s.currentHOH);let noms=chooseNominees(s,hoh);noms.forEach(n=>n.nominated=true);s.nominees=noms.map(n=>n.id);const plan=planTarget(s,hoh,noms);s.intendedTarget=plan.text;s.backdoorTargetId=plan.back?.id||null;s.targetHistory=[{text:plan.text,reason:"Initial target"}];log(s,{week,phase:"standard",type:"nominations",hohId:hoh.id,nomineeIds:s.nominees,intendedTarget:s.intendedTarget,backdoorTargetId:s.backdoorTargetId,targetHistory:s.targetHistory,title:"Nomination Ceremony",lines:[`${displayName(hoh)} nominates ${noms.map(displayName).join(" and ")} for eviction.`]});}
+  function planTarget(s,hoh,noms){
+    const ranked=noms.map(p=>({p,score:relationshipScore(s,hoh,p)})).sort((a,b)=>a.score-b.score);
+    const target=ranked[0]?.p;
+    const bd=R().planBackdoor?R().planBackdoor(s,hoh,noms):{use:false,target:null,reason:"No backdoor plan"};
+    return {text:target?displayName(target):null,back:bd.target||null,backActive:!!bd.use,backReason:bd.reason};
+  }
+  function runNominations(s,week){
+    const hoh=hg(s,s.currentHOH);
+    let noms=chooseNominees(s,hoh);
+    noms.forEach(n=>n.nominated=true);
+    s.nominees=noms.map(n=>n.id);
+    const plan=planTarget(s,hoh,noms);
+    s.intendedTarget=plan.text;
+    s.backdoorTargetId=plan.back?.id||null;
+    s.backdoorPlanActive=!!plan.backActive;
+    s.targetHistory=[{text:plan.text,reason:"Initial target"}];
+    if(plan.back) s.targetHistory.push({text:displayName(plan.back),reason:plan.backReason,backdoor:true});
+    const lines=[`${displayName(hoh)} nominates ${noms.map(displayName).join(" and ")} for eviction.`];
+    if(plan.backActive&&plan.back) lines.push(`${displayName(hoh)} appears to be setting up a possible backdoor of ${displayName(plan.back)} (${plan.backReason}).`);
+    else lines.push(`${displayName(hoh)} does not appear to be pursuing a backdoor this week.`);
+    log(s,{week,phase:"standard",type:"nominations",hohId:hoh.id,nomineeIds:s.nominees,intendedTarget:s.intendedTarget,backdoorTargetId:s.backdoorTargetId,backdoorPlanActive:s.backdoorPlanActive,targetHistory:s.targetHistory,title:"Nomination Ceremony",lines});
+  }
 
   function selectPOVPlayers(s,week){
     const noms=s.nominees.map(id=>hg(s,id)).filter(Boolean),hoh=hg(s,s.currentHOH);
-    const pool=[hoh,...noms,...shuffle(living(s).filter(p=>!noms.includes(p)&&p.id!==hoh.id)).slice(0,Math.max(0,6-1-noms.length))];
+    const pool=[hoh,...noms,...shuffle(living(s).filter(p=>!noms.some(n=>n.id===p.id)&&p.id!==hoh.id)).slice(0,Math.max(0,6-1-noms.length))];
     s.povPlayers=pool.map(p=>p.id);
     log(s,{week,phase:"standard",type:"pov-players",hohId:hoh.id,nomineeIds:s.nominees,povPlayers:s.povPlayers,participants:s.povPlayers,title:"POV Picked Players",lines:[`${displayName(hoh)} and the nominees are automatically selected; the remaining slots are randomly drawn.`]});
     return pool;
@@ -415,8 +436,12 @@
       if(!decision.use||!decision.saveId)continue;
       const saved=hg(s,decision.saveId);if(!saved)continue;
       saved.nominated=false;noms=noms.filter(n=>n.id!==saved.id);
-      const pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!noms.includes(p)&&p.id!==saved.id);
-      const replacement=pick(pool);
+      const pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!noms.some(n=>n.id===p.id)&&p.id!==saved.id);
+      let replacement=null;
+      const planned= s.backdoorPlanActive && s.backdoorTargetId ? hg(s,s.backdoorTargetId) : null;
+      const targetPlayedPOV = planned && s.povPlayers.includes(planned.id);
+      if(planned && planned.active && !planned.safe && !targetPlayedPOV && pool.some(p=>p.id===planned.id)) replacement=planned;
+      else replacement=R().pickReplacement ? R().pickReplacement(s,hoh,pool,noms.map(n=>n.id)) : pick(pool);
       if(replacement){replacement.nominated=true;noms.push(replacement);}
       if(x.second){second.used=true;actions.push(`${displayName(x.holder)} uses the Second Veto on ${displayName(saved)}${replacement?`; ${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee.`:"."}`);}
       else actions.push(`${displayName(x.holder)} uses the Power of Veto on ${displayName(saved)}${replacement?`; ${displayName(hoh)} names ${displayName(replacement)} as the replacement nominee.`:"."}`);
@@ -426,10 +451,19 @@
   }
   function evictionCycle(s,week,cycle=1){
     if(s.nominees.length<2){const hoh=hg(s,s.currentHOH);const fill=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!s.nominees.includes(p.id));while(s.nominees.length<2&&fill.length){const p=fill.shift();p.nominated=true;s.nominees.push(p.id);}}
-    const noms=s.nominees.map(id=>hg(s,id)).filter(Boolean).slice(0,2);s.nominees=noms.map(n=>n.id);const hoh=hg(s,s.currentHOH);const nomineeIds=new Set(noms.map(n=>n.id));const voters=living(s).filter(p=>p.id!==hoh.id&&!nomineeIds.has(p.id));const counts={[noms[0].id]:0,[noms[1].id]:0};s.evictionVotes=[];voters.forEach(v=>{let out=R().decideVote(s,v,noms[0],noms[1],hoh);if(!(out in counts))out=noms[0].id;counts[out]++;s.evictionVotes.push({voterId:v.id,targetId:out});});if(voters.length>=2&&(counts[noms[0].id]===0||counts[noms[1].id]===0)){const losingId=counts[noms[0].id]===0?noms[0].id:noms[1].id;const otherId=losingId===noms[0].id?noms[1].id:noms[0].id;const flip=voters.slice().sort((a,b)=>{const da=R().decideVote(s,a,noms[0],noms[1],hoh)===losingId?0:1;const db=R().decideVote(s,b,noms[0],noms[1],hoh)===losingId?0:1;return da-db;})[0];if(flip){const vote=s.evictionVotes.find(v=>v.voterId===flip.id);if(vote){vote.targetId=losingId;counts[otherId]--;counts[losingId]++;}}}const evictedId=counts[noms[0].id]>=counts[noms[1].id]?noms[0].id:noms[1].id;const evicted=hg(s,evictedId);const stay=noms.find(n=>n.id!==evictedId);log(s,{week,phase:cycle>1?"double-eviction":"standard",type:"eviction-voting",nomineeIds:s.nominees,voterIds:voters.map(v=>v.id),votes:s.evictionVotes,title:`${cycle>1?"Double Eviction — ":""}Eviction Vote`,lines:s.evictionVotes.map(v=>`${displayName(hg(s,v.voterId))} votes to evict ${displayName(hg(s,v.targetId))}.`)});
+    const noms=s.nominees.map(id=>hg(s,id)).filter(Boolean).slice(0,2);s.nominees=noms.map(n=>n.id);const hoh=hg(s,s.currentHOH);const nomineeIds=new Set(noms.map(n=>n.id));const voters=living(s).filter(p=>p.id!==hoh.id&&!nomineeIds.has(p.id));const counts={[noms[0].id]:0,[noms[1].id]:0};s.evictionVotes=[];voters.forEach(v=>{let out=R().decideVote(s,v,noms[0],noms[1],hoh);if(!(out in counts))out=noms[0].id;counts[out]++;s.evictionVotes.push({voterId:v.id,targetId:out});});if(voters.length>=2&&(counts[noms[0].id]===0||counts[noms[1].id]===0)){const losingId=counts[noms[0].id]===0?noms[0].id:noms[1].id;const otherId=losingId===noms[0].id?noms[1].id:noms[0].id;const flip=voters.slice().sort((a,b)=>{const da=R().decideVote(s,a,noms[0],noms[1],hoh)===losingId?0:1;const db=R().decideVote(s,b,noms[0],noms[1],hoh)===losingId?0:1;return da-db;})[0];if(flip){const vote=s.evictionVotes.find(v=>v.voterId===flip.id);if(vote){vote.targetId=losingId;counts[otherId]--;counts[losingId]++;}}}let evictedId;
+    let tieBreakVoteId=null;
+    if(counts[noms[0].id]===counts[noms[1].id]){
+      tieBreakVoteId=R().decideTieBreak?R().decideTieBreak(s,hoh,noms[0],noms[1]):noms[0].id;
+      evictedId=tieBreakVoteId;
+    }else{
+      evictedId=counts[noms[0].id]>counts[noms[1].id]?noms[0].id:noms[1].id;
+    }
+    const evicted=hg(s,evictedId);const stay=noms.find(n=>n.id!==evictedId);
+    log(s,{week,phase:cycle>1?"double-eviction":"standard",type:"eviction-voting",nomineeIds:s.nominees,voterIds:voters.map(v=>v.id),votes:s.evictionVotes,tieBreakVoteId,title:`${cycle>1?"Double Eviction — ":""}Eviction Vote`,lines:[...s.evictionVotes.map(v=>`${displayName(hg(s,v.voterId))} votes to evict ${displayName(hg(s,v.targetId))}.`),...(tieBreakVoteId?[`${displayName(hoh)} breaks the tie and votes to evict ${displayName(hg(s,tieBreakVoteId))}.`]:[])]});
     evicted.active=false;evicted.evicted=true;s.season.evictionCount++;evicted.placement=s.season.castSize-s.season.evictionCount+1;const juryThreshold=11;if(evicted.placement<=juryThreshold&&!s.jury.includes(evicted.id)){evicted.juryMember=true;s.jury.push(evicted.id);}s.evicted.push(evicted.id);
-    log(s,{week,phase:cycle>1?"double-eviction":"standard",type:"eviction",evictedId:evicted.id,voteCounts:counts,evictedVoteCount:counts[evicted.id],stayVoteCount:counts[stay.id],nomineeIds:s.nominees,title:"Eviction",lines:[`By a vote of ${counts[evicted.id]} to ${counts[stay.id]}, ${displayName(evicted)}, you have been evicted.`,evicted.juryMember?`${displayName(evicted)} joins the jury.`:`${displayName(evicted)} finishes in ${ordinal(evicted.placement)} place.`]});
-    s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.evictionVotes=[];return evicted;
+    log(s,{week,phase:cycle>1?"double-eviction":"standard",type:"eviction",evictedId:evicted.id,voteCounts:counts,evictedVoteCount:counts[evicted.id],stayVoteCount:counts[stay.id],tieBreakVoteId,nomineeIds:s.nominees,title:"Eviction",lines:[`By a vote of ${counts[noms[0].id]} to ${counts[noms[1].id]}, ${displayName(evicted)}, you have been evicted.`,...(tieBreakVoteId?[`${displayName(hoh)} broke the tie and voted to evict ${displayName(evicted)}.`]:[]),evicted.juryMember?`${displayName(evicted)} joins the jury.`:`${displayName(evicted)} finishes in ${ordinal(evicted.placement)} place.`]});
+    s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.evictionVotes=[];s.backdoorPlanActive=false;s.backdoorTargetId=null;return evicted;
   }
 
   function runCycle(s,config,week,cycle=1){s.week=week;s.phase=cycle>1?"double-eviction":"in-season";s.houseguests.forEach(h=>{h.safe=Number(h.wildcardSafetyUntilWeek||0)>=Number(week);h.nominated=false;});
@@ -461,7 +495,7 @@
     const afpId=afpScores[0]?.id||winnerId;const raw={};afpScores.forEach(x=>raw[x.id]=Math.max(.5,x.score));const total=Object.values(raw).reduce((a,b)=>a+b,0)||1;const afpVotes={};Object.keys(raw).forEach(id=>afpVotes[id]=Math.max(1,Math.round(raw[id]/total*100000)));const voteTotal=Object.values(afpVotes).reduce((a,b)=>a+b,0);afpVotes[afpId]+=(100000-voteTotal);
     s.finale={winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalHohId:finalHoh.id,votes:tally,jurySize:jurors.length,prize:750000,runnerUpPrize:75000,americasFavoritePrize:50000,americasFavoriteId:afpId,americasFavoriteVotes:afpVotes};s.phase="complete";log(s,{week:"Final",phase:"finale",type:"winner",winnerId,runnerUpId:runnerId,thirdPlaceId:third.id,finalistIds:[winnerId,runnerId],afpId,afpVotes,title:`${displayName(hg(s,winnerId))} Wins Big Brother!`,lines:[`By a vote of ${tally[winnerId]}-${tally[runnerId]}, ${displayName(hg(s,winnerId))} wins Big Brother.`,`${displayName(hg(s,runnerId))} finishes as the Runner-Up and receives $75,000.`,`America's Favorite Player: ${displayName(hg(s,afpId))} wins $50,000.`]});}
   function simulateSeason(s,config){
-    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.evictionVotes=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.secretHOH=null;s.dethronedHOH=null;s.finale=null;s.bbBucks={};s.powers=[];s.coinState=null;s._playedHighRollerWeeks={};s._wildcardPlayed={};s._week2BonusTeamSafety=null;s._week8EnvelopesAwarded=false;s.season.evictionCount=0;s.teams=config.teams.map(t=>({id:t.id,name:t.name,colorClass:t.colorClass||t.id,captainId:null,memberIds:[]}));s.houseguests.forEach(h=>{h.active=true;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.placement=null;h.teamId=null;h.teamCaptain=false;h.wildcardSafetyUntilWeek=0;});
+    ensureState(s);s.history=[];s.jury=[];s.evicted=[];s.evictionVotes=[];s.nominees=[];s.povPlayers=[];s.vetoWinners=[];s.currentHOH=null;s.originalHOH=null;s.secretHOH=null;s.dethronedHOH=null;s.finale=null;s.backdoorPlanActive=false;s.backdoorTargetId=null;s.bbBucks={};s.powers=[];s.coinState=null;s._playedHighRollerWeeks={};s._wildcardPlayed={};s._week2BonusTeamSafety=null;s._week8EnvelopesAwarded=false;s.season.evictionCount=0;s.teams=config.teams.map(t=>({id:t.id,name:t.name,colorClass:t.colorClass||t.id,captainId:null,memberIds:[]}));s.houseguests.forEach(h=>{h.active=true;h.safe=false;h.nominated=false;h.juryMember=false;h.evicted=false;h.placement=null;h.teamId=null;h.teamCaptain=false;h.wildcardSafetyUntilWeek=0;});
     runPremiere(s,config);let week=1;let guard=0;while(living(s).length>3&&week<=30&&guard<30){runCycle(s,config,week,1);week++;guard++;}runFinale(s);if(window.LiveFeeds?.addToSeason)window.LiveFeeds.addToSeason(s);return s;
   }
   window.SeasonEngine={simulateSeason,displayName,ordinal};
