@@ -141,13 +141,13 @@
       }
       return body;
     }
-    if (["bb-bucks","veto-derby","chopping-block-roulette","coin-of-destiny","coin-renomination"].includes(entry.type)) {
+    if (["bb-bucks","bb-bucks-envelopes","veto-derby","veto-derby-result","chopping-block-roulette","coin-of-destiny","coin-renomination"].includes(entry.type)) {
       const winner=byId(view,d.winnerId);
-      if (entry.type === "bb-bucks") {
-        const rows=(d.participants||[]).map((id,i)=>{const h=byId(view,id);const award=i<3?100:i<6?75:50;return `<div class="bucks-row">${portrait(h,"vote-portrait")}<strong>${esc(name(h))}</strong><span>+${award} BB Bucks</span></div>`}).join("");
+      if (entry.type === "bb-bucks" || entry.type === "bb-bucks-envelopes") {
+        const rows=(d.participants||[]).map((id,i)=>{const h=byId(view,id);const award=entry.type === "bb-bucks" ? (i<3?100:i<6?75:50) : null;return `<div class="bucks-row">${portrait(h,"vote-portrait")}<strong>${esc(name(h))}</strong><span>${entry.type === "bb-bucks" ? `+${award} BB Bucks` : "BONUS BB BUCKS"}</span></div>`}).join("");
         body += `<div class="bucks-list">${rows}</div>`;
       } else if (winner) {
-        body += `<div class="hero-players">${playerCard(winner, entry.type==="coin-destiny"?"COIN HOLDER":"POWER WINNER")}</div>`;
+        body += `<div class="hero-players">${playerCard(winner, entry.type==="coin-of-destiny"?"COIN HOLDER":entry.type==="veto-derby-result"?"SECOND VETO":"POWER WINNER")}</div>`;
       }
       return body;
     }
