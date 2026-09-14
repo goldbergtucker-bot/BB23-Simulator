@@ -24,6 +24,7 @@
   const eventCounter = $("eventCounter"), timeline = $("timeline"), memoryWall = $("memoryWall"), tabContent = $("tabContent");
   const previousBtn = $("previousBtn"), nextBtn = $("nextBtn"), revealWeekBtn = $("revealWeekBtn"), revealSeasonBtn = $("revealSeasonBtn");
   const relationshipsGrid = $("relationshipsGrid"), allianceSetup = $("allianceSetup");
+  const liveFeedsToggle=$("liveFeedsToggle"), liveFeedPromptPanel=$("liveFeedPromptPanel");
   const demoNames = [["Tucker","Player"],["Grace","Player"],["Antonio","Player"],["Riley","Player"],["Aly","Player"],["Stephanie","Player"],["Jordan","Player"],["Morgan","Player"],["Cameron","Player"],["Taylor","Player"],["Alex","Player"],["Casey","Player"],["Drew","Player"],["Jamie","Player"],["Logan","Player"],["Parker","Player"]];
   const REL_KEYS = ["friendship","trust","loyalty","rivalry","respect","attraction"];
   const REL_LABELS = {friendship:"Friendship",trust:"Trust",loyalty:"Loyalty",rivalry:"Rivalry",respect:"Respect",attraction:"Attraction"};
@@ -81,10 +82,15 @@
   }
 
   function liveFeedCard(entry) {
-    const d=entry.data||{}; const items=d.feedItems||[];
-    const pics=items.map(x=>x.participants||[]).flat().map(id=>byId(entry.snapshot,id)).filter(Boolean);
-    const unique=[...new Map(pics.map(p=>[p.id,p])).values()];
-    return `<div class="live-feed-card"><div class="live-feed-top"><span>LIVE FEEDS</span><strong>${esc(d.day||entry.day||"")}</strong><em>${esc(d.time||entry.time||"")}</em></div><div class="live-feed-content"><div class="live-feed-people">${unique.map(p=>playerCard(p)).join("")}</div><p>${esc(items.map(x=>x.text).join(" ")||entry.lines?.[0]||"Live feed update.")}</p></div></div>`;
+    const d=entry.data||{}, items=d.feedItems||[], context=d.contextNotes||[];
+    const participantIds=[...new Set(items.flatMap(x=>x.participants||[]))];
+    const pics=participantIds.map(id=>byId(entry.snapshot,id)).filter(Boolean);
+    return `<section class="daily-feed-page">
+      <div class="daily-feed-header"><div><span>BIG BROTHER LIVE FEEDS</span><h3>${esc(d.day||entry.day||"")}</h3><p>Week ${esc(entry.week)} · Complete daily feed</p></div><div class="feed-count">${items.length}<small>updates</small></div></div>
+      ${context.length?`<details class="feed-context"><summary>Story context used for this day's feeds</summary>${context.map(c=>`<p><strong>${esc(c.label)}:</strong> ${esc(c.text)}</p>`).join("")}</details>`:""}
+      <div class="daily-feed-cast">${pics.slice(0,12).map(p=>`<div class="daily-feed-person">${portrait(p,"daily-feed-portrait")}<span>${esc(name(p))}</span></div>`).join("")}</div>
+      <div class="daily-feed-updates">${items.map(x=>`<article class="feed-update ${x.kind==='feed-break'?'feed-break':''}"><time>${esc(x.time)}</time><div><p>${esc(x.text)}</p>${(x.participants||[]).length?`<small>${(x.participants||[]).map(id=>byId(entry.snapshot,id)).filter(Boolean).map(p=>esc(name(p))).join(" · ")}</small>`:""}</div></article>`).join("")}</div>
+    </section>`;
   }
 
   function eventData(entry, view) {
@@ -240,7 +246,7 @@
     const e=history[index], view=e.snapshot;
     eventKicker.textContent=`${weekLabel(e.week)}  •  ${(e.phase||"EVENT").replaceAll("-"," ").toUpperCase()}`;
     eventTitle.textContent=e.title;
-    eventBody.innerHTML=e.type==="live-feed" ? liveFeedCard(e) : `${eventData(e,view)}${eventText(e)}`;
+    eventBody.innerHTML=(e.type==="live-feed"||e.type==="live-feed-day") ? liveFeedCard(e) : `${eventData(e,view)}${eventText(e)}`;
     eventCounter.textContent=`${index+1} / ${history.length}`;
   }
   function statusBadge(h,view){
@@ -251,12 +257,17 @@
     return `<span class="pill in">IN HOUSE</span>`;
   }
   function renderMemory(view=history[pointer]?.snapshot || null){
-    const source=view?.houseguests||state.houseguests;
+    const source=view?.houseguests||history[0]?.snapshot?.houseguests||state.houseguests.map(h=>({...h,active:true,evicted:false,juryMember:false,placement:null}));
     const active=source.filter(h=>h.active), out=source.filter(h=>!h.active).sort((a,b)=>(a.placement||99)-(b.placement||99));
     memoryWall.innerHTML=`<div class="wall-section"><h3>IN THE HOUSE · ${active.length}</h3><div class="memory-grid">${active.map(h=>`<div class="memory-card">${portrait(h,"memory-portrait")}<div>${esc(name(h))}</div>${statusBadge(h,view)}</div>`).join("")}</div></div><div class="wall-section"><h3>ELIMINATED</h3><div class="memory-grid eliminated">${out.map(h=>`<div class="memory-card">${portrait(h,"memory-portrait")}<div>${esc(name(h))}</div>${statusBadge(h,view)}</div>`).join("")}</div></div>`;
   }
-  function renderTimeline(){timeline.innerHTML=history.map((e,i)=>`<button class="timeline-item ${i===pointer?"selected":""} ${i<=pointer?"revealed":"locked"}" data-index="${i}"><span>${i+1}</span><div><strong>${esc(e.title)}</strong><small>${weekLabel(e.week)}</small></div></button>`).join("");}
+  function renderTimeline(){timeline.innerHTML=history.map((e,i)=>{const revealed=i<=pointer;const title=revealed?e.title:"Locked Event";const week=revealed?weekLabel(e.week):"UNREVEALED";return `<button class="timeline-item ${i===pointer?"selected":""} ${revealed?"revealed":"locked"}" data-index="${i}"><span>${i+1}</span><div><strong>${esc(title)}</strong><small>${esc(week)}</small></div></button>`;}).join("");}
+  function resultsUnlocked(){return pointer>=0&&pointer===history.length-1&&history[pointer]?.type==="winner";}
   function renderStats(){
+    if(!resultsUnlocked()){
+      tabContent.innerHTML=`<div class="tab-panel results-locked"><div class="results-lock-icon">🔒</div><h2>Season Results Locked</h2><p>The final placements and winner stay hidden until you actually reach the final winner reveal.</p></div>`;
+      return;
+    }
     const final=state.houseguests.slice().sort((a,b)=>(a.placement||99)-(b.placement||99));
     tabContent.innerHTML=`<div class="tab-panel"><h2>Season Results</h2><div class="results-grid">${final.map(h=>`<div class="result-card"><b>${h.placement?ordinal(h.placement):"—"}</b>${portrait(h,"result-portrait")}<strong>${esc(name(h))}</strong>${h.juryMember?"<small>Jury</small>":""}</div>`).join("")}</div></div>`;
   }
@@ -269,7 +280,7 @@
     if(activeTab==="stats")renderStats(); else if(activeTab==="alliances")renderAlliances(); else {tabContent.innerHTML="";tabContent.classList.add("hidden");return;} tabContent.classList.remove("hidden");
   }
   function updateSeasonUI(){
-    const complete=state.phase==="complete";
+    const complete=resultsUnlocked();
     seasonHeading.textContent=state.season.name||"Big Brother 23";
     seasonStatusLine.textContent=complete?"SEASON COMPLETE":pointer<0?"READY":`${weekLabel(history[pointer]?.week)} · ${history[pointer]?.title||""}`;
     previousBtn.disabled=pointer<0; nextBtn.disabled=pointer>=history.length-1; revealWeekBtn.disabled=pointer<0||pointer>=history.length-1; revealSeasonBtn.disabled=pointer>=history.length-1;
@@ -283,9 +294,10 @@
   function startSeason(){
     const missing=state.houseguests.filter(h=>!h.firstName.trim()||!h.lastName.trim());
     if(missing.length){toastMsg("Every houseguest needs a first and last name.");return;}
+    syncLiveFeedSetupToState();
     const cast=JSON.parse(JSON.stringify(state));
     state=GameState.createInitialState(BB23_CONFIG);
-    state.season=cast.season;state.houseguests=cast.houseguests.map(h=>({...h,ratings:{general:50,physical:50,mental:50,social:50,strategic:50,...(h.ratings||{})}}));state.teams=cast.teams;state.relationships=cast.relationships;state.alliances=cast.alliances||[];
+    state.season={...state.season,...cast.season,liveFeedProfile:{...state.season.liveFeedProfile,...(cast.season?.liveFeedProfile||{})}};state.houseguests=cast.houseguests.map(h=>({...h,ratings:{general:50,physical:50,mental:50,social:50,strategic:50,...(h.ratings||{})}}));state.teams=cast.teams;state.relationships=cast.relationships;state.alliances=cast.alliances||[];
     SeasonEngine.simulateSeason(state,BB23_CONFIG);
     history=state.history||[];pointer=-1;localStorage.setItem(REVEAL_KEY,"-1");
     setupView.classList.add("hidden");seasonView.classList.remove("hidden");updateSeasonUI();
@@ -355,7 +367,23 @@
       const id=btn.dataset.removeAlliance;state.alliances=state.alliances.filter(a=>a.id!==id);state.houseguests.forEach(h=>h.allianceIds=h.allianceIds.filter(x=>x!==id));renderAlliancesSetup();
     }));
   }
-  function refreshSetup(){renderCast();renderTeams();renderRelationships();renderAlliancesSetup();validate();$("seasonName").value=state.season.name;$("themeUrl").value=state.season.themeUrl||"";$("logoUrl").value=state.season.logoUrl||"";}
+  function ensureFeedSettings(){
+    state.season=state.season||{};
+    if(typeof state.season.liveFeedsEnabled!=="boolean")state.season.liveFeedsEnabled=true;
+    state.season.liveFeedProfile={backstories:"",priorRelationships:"",personalities:"",conflictsAndRomance:"",recurringTopics:"",feedInstructions:"",...(state.season.liveFeedProfile||{})};
+  }
+  function renderLiveFeedSetup(){
+    ensureFeedSettings();
+    if(liveFeedsToggle){liveFeedsToggle.textContent=`Live Feeds: ${state.season.liveFeedsEnabled?"ON":"OFF"}`;liveFeedsToggle.classList.toggle("off",!state.season.liveFeedsEnabled);liveFeedsToggle.setAttribute("aria-pressed",String(state.season.liveFeedsEnabled));}
+    liveFeedPromptPanel?.classList.toggle("hidden",!state.season.liveFeedsEnabled);
+    const p=state.season.liveFeedProfile;
+    [["feedBackstories","backstories"],["feedPriorRelationships","priorRelationships"],["feedPersonalities","personalities"],["feedConflictsAndRomance","conflictsAndRomance"],["feedRecurringTopics","recurringTopics"],["feedInstructions","feedInstructions"]].forEach(([id,key])=>{const el=$(id);if(el&&document.activeElement!==el)el.value=p[key]||"";});
+  }
+  function syncLiveFeedSetupToState(){
+    ensureFeedSettings();
+    [["feedBackstories","backstories"],["feedPriorRelationships","priorRelationships"],["feedPersonalities","personalities"],["feedConflictsAndRomance","conflictsAndRomance"],["feedRecurringTopics","recurringTopics"],["feedInstructions","feedInstructions"]].forEach(([id,key])=>{const el=$(id);if(el)state.season.liveFeedProfile[key]=el.value;});
+  }
+  function refreshSetup(){renderCast();renderTeams();renderRelationships();renderAlliancesSetup();renderLiveFeedSetup();validate();$("seasonName").value=state.season.name;$("themeUrl").value=state.season.themeUrl||"";$("logoUrl").value=state.season.logoUrl||"";}
   function validate(){const ok=state.houseguests.every(h=>h.firstName.trim()&&h.lastName.trim());validity.textContent=ok?"Cast ready":"Names required";validity.classList.toggle("invalid",!ok);}
   function assignDemoTeams(){state.teams.forEach(t=>t.memberIds=[]);state.houseguests.forEach((h,i)=>{const t=state.teams[Math.floor(i/4)];h.teamId=t.id;t.memberIds.push(h.id);});}
   function loadDemo(){state=GameState.createInitialState(BB23_CONFIG);state.season.name="Big Brother 23 — Custom Demo";state.houseguests.forEach((h,i)=>{[h.firstName,h.lastName]=demoNames[i];h.ratings.general=45+(i*7)%45;h.ratings.physical=40+(i*11)%55;h.ratings.mental=42+(i*13)%53;h.ratings.social=45+(i*9)%50;h.ratings.strategic=40+(i*17)%58;});assignDemoTeams();refreshSetup();toastMsg("Demo cast loaded.");}
@@ -393,10 +421,12 @@
   });
 
   $("seasonName").addEventListener("input",e=>state.season.name=e.target.value);$("themeUrl").addEventListener("input",e=>state.season.themeUrl=e.target.value);$("logoUrl").addEventListener("input",e=>state.season.logoUrl=e.target.value);
+  liveFeedsToggle?.addEventListener("click",()=>{ensureFeedSettings();state.season.liveFeedsEnabled=!state.season.liveFeedsEnabled;renderLiveFeedSetup();toastMsg(state.season.liveFeedsEnabled?"Detailed live feeds enabled.":"Live feeds disabled for this season.");});
+  ["feedBackstories","feedPriorRelationships","feedPersonalities","feedConflictsAndRomance","feedRecurringTopics","feedInstructions"].forEach(id=>$(id)?.addEventListener("input",syncLiveFeedSetupToState));
   $("loadDemoBtn").onclick=loadDemo;$("resetBtn").onclick=()=>{if(confirm("Reset the entire cast?")){state=GameState.createInitialState(BB23_CONFIG);refreshSetup();}};
   $("saveBtn").onclick=()=>{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));toastMsg("Cast, relationships and alliances saved.");};
   $("exportBtn").onclick=()=>{const b=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="bb23-custom-season-v16.json";a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);};
-  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");x.relationships=x.relationships||{};Object.values(x.relationships).forEach(row=>Object.values(row||{}).forEach(r=>{if(r&&!r.type)r.type="Unspecified";}));x.alliances=(x.alliances||[]).map(a=>({...a,type:a.type||"Custom"}));x.season=x.season||{};state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
+  $("importInput").onchange=async e=>{try{const x=JSON.parse(await e.target.files[0].text());if(!x.houseguests||x.houseguests.length!==16)throw Error("Invalid 16-player cast");x.relationships=x.relationships||{};Object.values(x.relationships).forEach(row=>Object.values(row||{}).forEach(r=>{if(r&&!r.type)r.type="Unspecified";}));x.alliances=(x.alliances||[]).map(a=>({...a,type:a.type||"Custom"}));x.season=x.season||{};if(typeof x.season.liveFeedsEnabled!=="boolean")x.season.liveFeedsEnabled=true;x.season.liveFeedProfile={backstories:"",priorRelationships:"",personalities:"",conflictsAndRomance:"",recurringTopics:"",feedInstructions:"",...(x.season.liveFeedProfile||{})};state=x;refreshSetup();toastMsg("Season imported.");}catch(err){alert("Import failed: "+err.message)}e.target.value="";};
   $("simulateBtn").onclick=startSeason;$("resimulateBtn").onclick=startSeason;$("backToSetupBtn").onclick=resetSetup;
   previousBtn.onclick=previous;nextBtn.onclick=next;revealWeekBtn.onclick=revealWeek;revealSeasonBtn.onclick=()=>revealTo(history.length-1);
   timeline.addEventListener("click",e=>{const b=e.target.closest("button[data-index]");if(!b)return;const i=Number(b.dataset.index);if(i<=pointer+1)revealTo(i);});
