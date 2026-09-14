@@ -35,6 +35,7 @@
       slot: index + 1,
       firstName: "",
       lastName: "",
+      displayName: "",
       portraitUrl: "",
       teamId: null,
       gender: "",
