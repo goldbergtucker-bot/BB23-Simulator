@@ -163,8 +163,17 @@
     }
     if (entry.type === "eviction") {
       const evicted = byId(view, d.evictedId);
-      const a = Number(d.evictedVoteCount ?? 0);
-      const b = Number(d.stayVoteCount ?? 0);
+      const rawVotes = d.votes || view?.evictionVotes || [];
+      let a = Number(d.evictedVoteCount ?? NaN);
+      let b = Number(d.stayVoteCount ?? NaN);
+      if (!Number.isFinite(a) || !Number.isFinite(b)) {
+        const counts = {};
+        rawVotes.forEach(v => { counts[v.targetId] = (counts[v.targetId] || 0) + 1; });
+        a = evicted ? Number(counts[evicted.id] || 0) : 0;
+        const nomineeIds = d.nomineeIds || view?.nominees || [];
+        const stayId = nomineeIds.find(id => id !== evicted?.id);
+        b = stayId ? Number(counts[stayId] || 0) : 0;
+      }
       body += `<div class="eviction-result">${evicted ? playerCard(evicted,"EVICTED") : ""}<div class="eviction-vote-count">By a vote of <strong>${a} to ${b}</strong>, ${esc(name(evicted))}, you have been evicted.</div></div>`;
       return body;
     }
@@ -294,6 +303,9 @@
   function startSeason(){
     const missing=state.houseguests.filter(h=>!h.firstName.trim()||!h.lastName.trim());
     if(missing.length){toastMsg("Every houseguest needs a first and last name.");return;}
+    const maleCount=state.houseguests.filter(h=>String(h.gender||"").toLowerCase()==="male").length;
+    const femaleCount=state.houseguests.filter(h=>String(h.gender||"").toLowerCase()==="female").length;
+    if(maleCount!==8||femaleCount!==8){toastMsg(`BB23 Team Captains requires 8 men and 8 women. Currently: ${maleCount} men, ${femaleCount} women.`);return;}
     syncLiveFeedSetupToState();
     const cast=JSON.parse(JSON.stringify(state));
     state=GameState.createInitialState(BB23_CONFIG);
