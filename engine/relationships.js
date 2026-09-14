@@ -90,7 +90,8 @@
       name,
       memberIds: [...memberIds],
       formedWeek: week,
-      active: true
+      active: true,
+      type: "Simulated Alliance"
     };
     state.alliances.push(alliance);
     alliance.memberIds.forEach(id => {
