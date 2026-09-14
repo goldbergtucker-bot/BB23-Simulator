@@ -119,16 +119,85 @@
     });
   }
 
-  /** HOH picks `count` nominees from `eligible`, biased toward weakest bonds. */
+  /**
+   * HOH nomination logic.  Nominations are not simply random: the engine
+   * weighs personal relationships, alliances, rivalry, strategic threat,
+   * competition threat, and the HOH's own ratings.  Allies are heavily
+   * protected unless the HOH is desperate or the alliance is already
+   * breaking down.
+   */
   function pickNominees(state, hoh, eligible, count) {
     const scored = eligible.map(hg => {
-      let score = bondScore(state, hoh.id, hg.id);
-      if (isAllyOf(state, hoh.id, hg.id)) score += 30;
-      score += Math.random() * 22 - 11;
+      const r = rel(state, hoh.id, hg.id) || {};
+      const bond = bondScore(state, hoh.id, hg.id);
+      const rival = Number(r.rivalry || 0);
+      const alliance = isAllyOf(state, hoh.id, hg.id);
+      const strategicThreat = Number(hg.ratings?.strategic || 50);
+      const compThreat = (Number(hg.ratings?.physical || 50) + Number(hg.ratings?.mental || 50)) / 2;
+      let score = bond * 0.52 + Number(r.respect || 50) * 0.08 - rival * 0.24;
+      score -= strategicThreat * 0.16 + compThreat * 0.08;
+      if (alliance) score += 34 + Number(r.trust || 50) * 0.12 + Number(r.loyalty || 50) * 0.12;
+      if (Number(r.friendship || 50) >= 72 && Number(r.trust || 50) >= 65) score += 18;
+      // A weak/socially isolated houseguest is a more believable pawn.
+      if (Number(hg.ratings?.social || 50) < 45 && bond >= 48) score += 7;
+      score += Math.random() * 24 - 12;
       return { hg, score };
     });
     scored.sort((a, b) => a.score - b.score);
-    return scored.slice(0, count).map(s => s.hg);
+    return scored.slice(0, count).map(x => x.hg);
+  }
+
+  /**
+   * Chooses whether a HOH should pursue a backdoor plan. A backdoor is more
+   * likely when the target is a strong competitor, outside the HOH's
+   * alliance, personally disliked, and unlikely to be selected for POV.
+   */
+  function planBackdoor(state, hoh, nominees) {
+    const nomineeIds = new Set(nominees.map(n => n.id));
+    const candidates = livingHouseguests(state).filter(hg => hg.id !== hoh.id && !nomineeIds.has(hg.id) && !hg.safe);
+    if (!candidates.length) return { use: false, target: null, reason: "No eligible backdoor target" };
+
+    const ranked = candidates.map(target => {
+      const r = rel(state, hoh.id, target.id) || {};
+      const bond = bondScore(state, hoh.id, target.id);
+      const allianceOpposition = isAllyOf(state, hoh.id, target.id) ? -32 : 16;
+      const targetThreat = Number(target.ratings?.strategic || 50) * 0.42 + Number(target.ratings?.physical || 50) * 0.20 + Number(target.ratings?.mental || 50) * 0.14 + Number(target.ratings?.social || 50) * 0.08;
+      const rivalry = Number(r.rivalry || 0) * 0.30;
+      const isolation = (100 - Number(r.friendship || 50)) * 0.10;
+      const score = targetThreat + rivalry + isolation - bond * 0.25 + allianceOpposition + (Math.random() * 10 - 5);
+      return { target, score };
+    }).sort((a,b)=>b.score-a.score);
+
+    const best = ranked[0];
+    const hohStrategic = Number(hoh.ratings?.strategic || 50);
+    const threshold = 58 - (hohStrategic - 50) * 0.16;
+    const use = best.score >= threshold && Math.random() < (0.28 + Math.max(0, hohStrategic - 45) / 180);
+    if (!use) return { use: false, target: null, reason: "HOH chooses not to pursue a backdoor" };
+
+    let reason = "major strategic threat";
+    const r = rel(state, hoh.id, best.target.id) || {};
+    if (Number(r.rivalry || 0) >= 55) reason = "personal rivalry";
+    else if (!isAllyOf(state, hoh.id, best.target.id) && Number(best.target.ratings?.strategic || 50) >= 70) reason = "opposing strategic threat";
+    else if (Number(best.target.ratings?.physical || 50) >= 75) reason = "competition threat";
+    return { use: true, target: best.target, reason };
+  }
+
+  /** HOH breaks an eviction tie based on relationships, alliances and the
+   * intended target rather than randomly. */
+  function decideTieBreak(state, hoh, nomineeA, nomineeB) {
+    const score = nominee => {
+      const r = rel(state, hoh.id, nominee.id) || {};
+      let v = bondScore(state, hoh.id, nominee.id);
+      if (isAllyOf(state, hoh.id, nominee.id)) v += 35;
+      v += Number(r.friendship || 50) * 0.12 + Number(r.trust || 50) * 0.12 + Number(r.loyalty || 50) * 0.10;
+      v -= Number(r.rivalry || 0) * 0.30;
+      if (state.intendedTarget === nominee.id || state.intendedTarget === `${nominee.firstName} ${nominee.lastName}`.trim()) v -= 30;
+      if (state.backdoorTargetId === nominee.id) v -= 45;
+      return v;
+    };
+    const a=score(nomineeA), b=score(nomineeB);
+    if (Math.abs(a-b)<5) return Math.random()<0.5 ? nomineeA.id : nomineeB.id;
+    return a < b ? nomineeA.id : nomineeB.id;
   }
 
   /** Chooses a replacement nominee after a veto save. */
@@ -213,7 +282,7 @@
   window.RelEngine = {
     bondScore, adjustPair, isAllyOf, alliesOf, activeAlliances,
     formAlliances, pruneAlliances, pickNominees, pickReplacement,
-    decideVetoUse, decideVote, decideFinalTwoPick, decideJuryVote,
+    decideVetoUse, decideVote, decideTieBreak, planBackdoor, decideFinalTwoPick, decideJuryVote,
     livingHouseguests
   };
 })();
