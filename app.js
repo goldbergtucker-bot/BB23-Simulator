@@ -48,7 +48,7 @@
     const d = entry.data || {};
     const ids = [];
     [d.participants,d.nomineeIds,d.voterIds,d.finalistIds].forEach(a=>(a||[]).forEach(id=>ids.push(id)));
-    if(d.winnerId) ids.push(d.winnerId); if(d.hohId) ids.push(d.hohId); if(d.evictedId) ids.push(d.evictedId); if(d.runnerUpId) ids.push(d.runnerUpId); if(d.thirdPlaceId) ids.push(d.thirdPlaceId);
+    if(d.winnerId) ids.push(d.winnerId); if(d.afpId) ids.push(d.afpId); if(d.hohId) ids.push(d.hohId); if(d.evictedId) ids.push(d.evictedId); if(d.runnerUpId) ids.push(d.runnerUpId); if(d.thirdPlaceId) ids.push(d.thirdPlaceId);
     return [...new Set(ids)].map(id=>byId(view,id)).filter(Boolean);
   }
 
@@ -278,7 +278,9 @@
       return;
     }
     const final=state.houseguests.slice().sort((a,b)=>(a.placement||99)-(b.placement||99));
-    tabContent.innerHTML=`<div class="tab-panel"><h2>Season Results</h2><div class="results-grid">${final.map(h=>`<div class="result-card"><b>${h.placement?ordinal(h.placement):"—"}</b>${portrait(h,"result-portrait")}<strong>${esc(name(h))}</strong>${h.juryMember?"<small>Jury</small>":""}</div>`).join("")}</div></div>`;
+    const f=state.finale||{},winner=byId(null,f.winnerId),runner=byId(null,f.runnerUpId),afp=byId(null,f.americasFavoriteId);
+    const awardCards=`<div class="final-awards">${winner?`<div class="final-award winner-award"><span>WINNER</span>${portrait(winner,"award-portrait")}<strong>${esc(name(winner))}</strong><small>$750,000</small></div>`:""}${runner?`<div class="final-award runner-award"><span>RUNNER-UP</span>${portrait(runner,"award-portrait")}<strong>${esc(name(runner))}</strong><small>$75,000</small></div>`:""}${afp?`<div class="final-award afp-award"><span>AMERICA'S FAVORITE PLAYER</span>${portrait(afp,"award-portrait")}<strong>${esc(name(afp))}</strong><small>$50,000</small></div>`:""}</div>`;
+    tabContent.innerHTML=`<div class="tab-panel"><h2>Season Results</h2>${awardCards}<h3 class="results-subhead">Final Placements</h3><div class="results-grid">${final.map(h=>`<div class="result-card"><b>${h.placement?ordinal(h.placement):"—"}</b>${portrait(h,"result-portrait")}<strong>${esc(name(h))}</strong>${h.juryMember?"<small>Jury</small>":""}</div>`).join("")}</div></div>`;
   }
   function renderAlliances(){
     const a=state.alliances||[];
