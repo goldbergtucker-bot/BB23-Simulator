@@ -78,6 +78,13 @@
     </section>`;
   }
 
+  function liveFeedCard(entry) {
+    const d=entry.data||{}; const items=d.feedItems||[];
+    const pics=items.map(x=>x.participants||[]).flat().map(id=>byId(entry.snapshot,id)).filter(Boolean);
+    const unique=[...new Map(pics.map(p=>[p.id,p])).values()];
+    return `<div class="live-feed-card"><div class="live-feed-top"><span>LIVE FEEDS</span><strong>${esc(d.day||entry.day||"")}</strong><em>${esc(d.time||entry.time||"")}</em></div><div class="live-feed-content"><div class="live-feed-people">${unique.map(p=>playerCard(p)).join("")}</div><p>${esc(items.map(x=>x.text).join(" ")||entry.lines?.[0]||"Live feed update.")}</p></div></div>`;
+  }
+
   function eventData(entry, view) {
     const d = entry.data || {};
     // Every competition, including POV, gets its official competition card
@@ -148,11 +155,8 @@
     }
     if (entry.type === "eviction") {
       const evicted = byId(view, d.evictedId);
-      const counts = d.voteCounts || {};
-      const a = Number(d.evictedVoteCount ?? counts[d.evictedId] ?? 0);
-      const nomineeIds = d.nomineeIds || [];
-      const stayId = nomineeIds.find(id => id !== d.evictedId);
-      const b = Number(d.stayVoteCount ?? counts[stayId] ?? 0);
+      const a = Number(d.evictedVoteCount ?? 0);
+      const b = Number(d.stayVoteCount ?? 0);
       body += `<div class="eviction-result">${evicted ? playerCard(evicted,"EVICTED") : ""}<div class="eviction-vote-count">By a vote of <strong>${a} to ${b}</strong>, ${esc(name(evicted))}, you have been evicted.</div></div>`;
       return body;
     }
@@ -234,7 +238,7 @@
     const e=history[index], view=e.snapshot;
     eventKicker.textContent=`${weekLabel(e.week)}  •  ${(e.phase||"EVENT").replaceAll("-"," ").toUpperCase()}`;
     eventTitle.textContent=e.title;
-    eventBody.innerHTML=`${eventData(e,view)}${eventText(e)}`;
+    eventBody.innerHTML=e.type==="live-feed" ? liveFeedCard(e) : `${eventData(e,view)}${eventText(e)}`;
     eventCounter.textContent=`${index+1} / ${history.length}`;
   }
   function statusBadge(h,view){
