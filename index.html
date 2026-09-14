@@ -10,8 +10,22 @@
 <header class="topbar"><div class="brand"><div class="brand-mark">BB</div><div><b>BIG BROTHER</b><span>23 · CUSTOM SIMULATOR</span></div></div><div class="top-actions"><button id="backToSetupBtn" class="ghost">Cast Setup</button></div></header>
 <main>
 <section id="setupView">
-  <div class="setup-hero"><div><span class="eyebrow">CUSTOM BRANTSTEELE-STYLE SIMULATOR · V16</span><h1>Build Your BB23 Season</h1><p>Build your custom cast, portraits, ratings, relationships and alliances — then run the full BB23 season one event at a time.</p></div><div class="hero-actions"><button id="loadDemoBtn">Load Demo Cast</button><button id="simulateBtn" class="primary">Simulate Season</button></div></div>
+  <div class="setup-hero"><div><span class="eyebrow">CUSTOM BRANTSTEELE-STYLE SIMULATOR · V22</span><h1>Build Your BB23 Season</h1><p>Build your custom cast, portraits, ratings, relationships and alliances — then run the full BB23 season one event at a time.</p></div><div class="hero-actions"><button id="loadDemoBtn">Load Demo Cast</button><button id="simulateBtn" class="primary">Simulate Season</button></div></div>
   <section class="settings-panel"><h2>Season Settings</h2><div class="settings-grid"><label>Season Name<input id="seasonName"></label><label>Theme URL<input id="themeUrl" placeholder="https://..."></label><label>Logo URL<input id="logoUrl" placeholder="https://..."></label></div></section>
+  <section class="feed-setup-panel">
+    <div class="feed-setup-heading"><div><span class="eyebrow">OPTIONAL STORY MODE</span><h2>Live Feeds</h2><p>Turn on detailed Thursday-to-Thursday live feeds. When enabled, each day appears as one complete feed page rather than scattered snippets.</p></div><button id="liveFeedsToggle" type="button" class="feed-toggle" aria-pressed="true">Live Feeds: ON</button></div>
+    <div id="liveFeedPromptPanel" class="feed-prompt-panel">
+      <h3>Live Feed Story Prompt</h3><p class="muted-note">These open-response notes are carried into the daily feed generator so conversations can reflect your cast's history, relationships, personalities and recurring storylines.</p>
+      <div class="feed-prompt-grid">
+        <label>Houseguest backstories<textarea id="feedBackstories" rows="6" placeholder="Example: Tucker and Riley met in college. Grace grew up competing in theater... Include as much detail as you want."></textarea></label>
+        <label>Pre-existing relationships & history<textarea id="feedPriorRelationships" rows="6" placeholder="Who knew each other before the game? Former friends, best friends, exes, rivals, family connections, secret pairs, old arguments, etc."></textarea></label>
+        <label>Personalities, habits & speaking styles<textarea id="feedPersonalities" rows="6" placeholder="How does each person act? Quiet, blunt, funny, paranoid, analytical, emotional, sarcastic, late-night talker, early riser, etc."></textarea></label>
+        <label>Conflict, romance & unresolved tension<textarea id="feedConflictsAndRomance" rows="6" placeholder="Showmances, crushes, jealousy, betrayals, rivalries, awkward history, people likely to clash, etc."></textarea></label>
+        <label>Recurring topics, jokes & personal details<textarea id="feedRecurringTopics" rows="6" placeholder="Inside jokes, hobbies, school/work stories, family stories, favorite topics, house routines, catchphrases, running jokes, etc."></textarea></label>
+        <label>Special feed instructions<textarea id="feedInstructions" rows="6" placeholder="Anything else the daily feeds should emphasize: more strategy, more casual conversations, more late-night talks, realistic arguments, detailed campaigning, and so on."></textarea></label>
+      </div>
+    </div>
+  </section>
   <div class="section-heading"><div><h2>Houseguests</h2><p>16 custom players · portraits · five ratings</p></div><div class="tools"><span id="validity">Cast ready</span><button id="saveBtn">Save</button><button id="exportBtn">Export</button><label class="import">Import<input id="importInput" type="file" accept="application/json"></label><button id="resetBtn" class="danger">Reset</button></div></div>
   <div id="castGrid" class="cast-grid"></div>
   <section class="section-heading"><div><h2>BB23 Teams</h2><p>Teams are separate from alliances and follow the BB23 opening format.</p></div></section><div id="teamsGrid" class="teams-grid"></div>
