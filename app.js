@@ -308,8 +308,89 @@
     const relationshipNote=state.season.relationshipsCustomized?"Custom starting relationships are active.":"Starting relationships are randomized when you simulate.";
     tabContent.innerHTML=`<div class="tab-panel"><h2>Alliances & Relationships</h2><p class="muted-note">${relationshipNote}</p>${a.length?a.map(x=>`<div class="alliance-card"><div class="alliance-heading"><div><h3>${esc(x.name)}</h3><small>${esc(x.type|| (x.custom?"Custom":"Simulated"))}</small></div><span>${x.memberIds.length} members</span></div><div class="alliance-members">${x.memberIds.map(id=>{const h=byId(null,id);return playerCard(h)}).join("")}</div></div>`).join(""):"<p>No alliances have formed yet.</p>"}</div>`;
   }
+
+  function weeklySummaryRows(){
+    if(!history.length) return [];
+    const summaries=[];
+    const povIndexes=history.map((e,i)=>({e,i})).filter(x=>x.e.type==="pov-players");
+    povIndexes.forEach(({i})=>{
+      const povPick=history[i];
+      let nomIndex=-1;
+      for(let j=i-1;j>=0;j--){
+        if(history[j].type==="nominations"){nomIndex=j;break;}
+        if(history[j].type==="pov-players")break;
+      }
+      if(nomIndex<0)return;
+      let evictionIndex=-1, vetoIndex=-1, vetoCeremonyIndex=-1;
+      for(let j=i+1;j<history.length;j++){
+        if(history[j].type==="pov-players")break;
+        if(history[j].type==="veto")vetoIndex=j;
+        if(history[j].type==="veto-ceremony")vetoCeremonyIndex=j;
+        if(history[j].type==="eviction"){evictionIndex=j;break;}
+      }
+      if(evictionIndex<0)return;
+      const segment=history.slice(nomIndex,evictionIndex+1);
+      const findLast=type=>{for(let k=segment.length-1;k>=0;k--)if(segment[k].type===type)return segment[k];return null;};
+      const findFirst=type=>segment.find(e=>e.type===type)||null;
+      const noms=findFirst("nominations");
+      const veto=findLast("veto");
+      const ceremony=findLast("veto-ceremony");
+      const eviction=history[evictionIndex];
+      let hoh=null;
+      for(let j=nomIndex-1;j>=0;j--){
+        if(history[j].week!==noms.week)break;
+        if(["hoh","hoh-de"].includes(history[j].type)){hoh=history[j];break;}
+      }
+      if(!hoh){
+        for(let j=nomIndex-1;j>=0;j--){if(["hoh","hoh-de"].includes(history[j].type)){hoh=history[j];break;}}
+      }
+      const initialIds=noms?.data?.nomineeIds||[];
+      const finalIds=ceremony?.data?.finalNomineeIds||ceremony?.data?.nomineeIds||eviction?.data?.nomineeIds||initialIds;
+      const savedIds=initialIds.filter(id=>!finalIds.includes(id));
+      const replacementIds=finalIds.filter(id=>!initialIds.includes(id));
+      const wildcard=findLast("wildcard");
+      const hohPlayer=hoh?byId(hoh.snapshot,hoh.data?.winnerId||hoh.winnerId):null;
+      const wildcardPlayer=wildcard?byId(wildcard.snapshot,wildcard.data?.winnerId||wildcard.winnerId):null;
+      const initialNames=initialIds.map(id=>byId(noms.snapshot,id)).filter(Boolean).map(name);
+      const finalNames=finalIds.map(id=>byId((ceremony||eviction).snapshot,id)).filter(Boolean).map(name);
+      const evicted=byId(eviction.snapshot,eviction.data?.evictedId||eviction.evictedId);
+      const savedNames=savedIds.map(id=>byId((ceremony||eviction).snapshot,id)).filter(Boolean).map(name);
+      const replacementNames=replacementIds.map(id=>byId((ceremony||eviction).snapshot,id)).filter(Boolean).map(name);
+      const used=!!(ceremony?.data?.vetoUsed);
+      const voteA=Number(eviction?.data?.evictedVoteCount ?? eviction?.evictedVoteCount ?? NaN);
+      const voteB=Number(eviction?.data?.stayVoteCount ?? eviction?.stayVoteCount ?? NaN);
+      const tie=!!(eviction?.data?.tieBreakVoteId || eviction?.tieBreakVoteId);
+      const cycleLabel=(noms.phase==="double-eviction"||povPick.phase==="double-eviction")?" — Double Eviction":"";
+      summaries.push({
+        week:noms.week,
+        label:`Week ${noms.week}${cycleLabel}`,
+        hoh:hohPlayer?name(hohPlayer):"—",
+        wildcard:wildcardPlayer?name(wildcardPlayer):null,
+        initial:initialNames.length?initialNames.join(" and "):"—",
+        pov:veto?(()=>{const h=byId(veto.snapshot,veto.data?.winnerId||veto.winnerId);return h?name(h):"—";})():"—",
+        used:used?`Yes${savedNames.length?` on ${savedNames.join(" and ")}`:""}`:"No",
+        replacement:replacementNames.length?replacementNames.join(" and "):"—",
+        final:finalNames.length?finalNames.join(" and "):"—",
+        evicted:evicted?`${name(evicted)}${tie?" (Tie-Breaker Vote)":(Number.isFinite(voteA)&&Number.isFinite(voteB)?` (${voteA}-${voteB} Vote)`:"")}`:"—",
+        sortWeek:Number(noms.week)||0,
+        sortIndex:nomIndex
+      });
+    });
+    return summaries.sort((a,b)=>a.sortIndex-b.sortIndex);
+  }
+
+  function renderWeeklySummary(){
+    if(!resultsUnlocked()){
+      tabContent.innerHTML=`<div class="tab-panel results-locked"><div class="results-lock-icon">🔒</div><h2>Weekly Summary Locked</h2><p>The complete week-by-week season summary will be revealed after you reach the final winner reveal.</p></div>`;
+      return;
+    }
+    const rows=weeklySummaryRows();
+    const cards=rows.map(r=>`<article class="weekly-summary-card"><h3>${esc(r.label)}</h3><div class="weekly-summary-rows"><div><strong>HoH Winner:</strong><span>${esc(r.hoh)}</span></div>${r.wildcard?`<div><strong>Wildcard Winner:</strong><span>${esc(r.wildcard)}</span></div>`:""}<div><strong>Initial Nominees:</strong><span>${esc(r.initial)}</span></div><div><strong>PoV Winner:</strong><span>${esc(r.pov)}</span></div><div><strong>Veto Used:</strong><span>${esc(r.used)}</span></div><div><strong>Replacement:</strong><span>${esc(r.replacement)}</span></div><div><strong>Final Nominees:</strong><span>${esc(r.final)}</span></div><div><strong>Evicted:</strong><span>${esc(r.evicted)}</span></div></div></article>`).join("");
+    tabContent.innerHTML=`<div class="tab-panel weekly-summary-panel"><h2>Weekly Summary</h2><p class="muted-note">A BrantSteele-style recap of every eviction cycle in the completed season.</p><div class="weekly-summary-list">${cards||"<p>No completed eviction weeks found.</p>"}</div></div>`;
+  }
+
   function renderTab(){
-    if(activeTab==="stats")renderStats(); else if(activeTab==="alliances")renderAlliances(); else {tabContent.innerHTML="";tabContent.classList.add("hidden");return;} tabContent.classList.remove("hidden");
+    if(activeTab==="stats")renderStats(); else if(activeTab==="weekly-summary")renderWeeklySummary(); else if(activeTab==="alliances")renderAlliances(); else {tabContent.innerHTML="";tabContent.classList.add("hidden");return;} tabContent.classList.remove("hidden");
   }
   function updateSeasonUI(){
     const complete=resultsUnlocked();
