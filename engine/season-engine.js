@@ -432,11 +432,29 @@
     if(second){const owner=hg(s,second.ownerId);if(owner)holders.push({holder:owner,second:true});}
     holders.push({holder:veto.winner,second:false});
     for(const x of holders){
-      const decision=R().decideVetoUse?R().decideVetoUse(s,x.holder,hoh,noms):{use:Math.random()<.4,saveId:noms[0]?.id};
+      /*
+       * A nominee who wins the Power of Veto always uses it on themselves.
+       * This is a hard game-rule safeguard, not a probabilistic preference.
+       * It also prevents a relationship/AI decision from ever leaving the
+       * winning nominee on the block.
+       */
+      const holderIsNominee = noms.some(n => n.id === x.holder.id);
+      const decision = holderIsNominee
+        ? {use:true, saveId:x.holder.id}
+        : (R().decideVetoUse
+            ? R().decideVetoUse(s,x.holder,hoh,noms)
+            : {use:Math.random()<.4,saveId:noms[0]?.id});
       if(!decision.use||!decision.saveId)continue;
       const saved=hg(s,decision.saveId);if(!saved)continue;
       saved.nominated=false;noms=noms.filter(n=>n.id!==saved.id);
-      const pool=living(s).filter(p=>p.id!==hoh.id&&!p.safe&&!noms.some(n=>n.id===p.id)&&p.id!==saved.id);
+      const vetoHolderIds = new Set(holders.map(h => h.holder.id));
+      const pool=living(s).filter(p=>
+        p.id!==hoh.id &&
+        !p.safe &&
+        !noms.some(n=>n.id===p.id) &&
+        p.id!==saved.id &&
+        !vetoHolderIds.has(p.id)
+      );
       let replacement=null;
       const planned= s.backdoorPlanActive && s.backdoorTargetId ? hg(s,s.backdoorTargetId) : null;
       const targetPlayedPOV = planned && s.povPlayers.includes(planned.id);
