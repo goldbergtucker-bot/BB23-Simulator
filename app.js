@@ -356,7 +356,7 @@
       const evicted=byId(eviction.snapshot,eviction.data?.evictedId||eviction.evictedId);
       const savedNames=savedIds.map(id=>byId((ceremony||eviction).snapshot,id)).filter(Boolean).map(name);
       const replacementNames=replacementIds.map(id=>byId((ceremony||eviction).snapshot,id)).filter(Boolean).map(name);
-      const used=!!(ceremony?.data?.vetoUsed);
+      const used=!!(ceremony?.data?.vetoUsed ?? ceremony?.vetoUsed);
       const voteA=Number(eviction?.data?.evictedVoteCount ?? eviction?.evictedVoteCount ?? NaN);
       const voteB=Number(eviction?.data?.stayVoteCount ?? eviction?.stayVoteCount ?? NaN);
       const tie=!!(eviction?.data?.tieBreakVoteId || eviction?.tieBreakVoteId);
