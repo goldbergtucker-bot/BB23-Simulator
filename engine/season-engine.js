@@ -45,6 +45,7 @@
     d.competition=e.competition?JSON.parse(JSON.stringify(e.competition)):d.competition||null;
     d.participants=ids(e.participants||d.participants);d.nomineeIds=ids(e.nomineeIds||d.nomineeIds||s.nominees);d.povPlayers=ids(e.povPlayers||d.povPlayers||s.povPlayers);
     d.winnerId=e.winnerId||d.winnerId||null;d.hohId=e.hohId||d.hohId||s.currentHOH||null;d.evictedId=e.evictedId||d.evictedId||null;
+    if(e.type==="veto-ceremony"){d.vetoUsed=!!(e.vetoUsed ?? d.vetoUsed);d.finalNomineeIds=ids(e.finalNomineeIds||d.finalNomineeIds||e.nomineeIds||d.nomineeIds||s.nominees);}
     if(e.type==="teams")d.teams=JSON.parse(JSON.stringify(s.teams));
     if(e.type==="eviction-voting")d.votes=(s.evictionVotes||[]).map(v=>({...v})),d.voterIds=d.votes.map(v=>v.voterId);
     if(e.type==="eviction") {
@@ -439,11 +440,38 @@
        * winning nominee on the block.
        */
       const holderIsNominee = noms.some(n => n.id === x.holder.id);
-      const decision = holderIsNominee
-        ? {use:true, saveId:x.holder.id}
-        : (R().decideVetoUse
-            ? R().decideVetoUse(s,x.holder,hoh,noms)
-            : {use:Math.random()<.4,saveId:noms[0]?.id});
+      const planned = s.backdoorPlanActive && s.backdoorTargetId ? hg(s, s.backdoorTargetId) : null;
+      const targetPlayedPOV = planned && s.povPlayers.includes(planned.id);
+
+      /*
+       * A planned backdoor changes the veto decision. If the target did not
+       * win POV, the HOH wants one of the pawns removed so the backdoor target
+       * can be named as the replacement. This includes the HOH winning POV --
+       * an HOH can intentionally use their own veto on a pawn.
+       *
+       * The plan itself is already probabilistic in planBackdoor(), so this
+       * does not make every week a backdoor week. Once a plan exists, however,
+       * an HOH who wins POV strongly prefers carrying it out.
+       */
+      let decision;
+      if (holderIsNominee) {
+        decision = {use:true, saveId:x.holder.id};
+      } else if (planned && planned.active && !planned.safe && !targetPlayedPOV && noms.length) {
+        const pawnPool = noms.slice();
+        const pawn = pawnPool
+          .map(n => ({ n, bond: relationshipScore(s, hoh, n) }))
+          .sort((a,b) => b.bond - a.bond)[0]?.n;
+        const plannedUseChance = x.holder.id === hoh.id ? 0.96 : 0.78;
+        decision = Math.random() < plannedUseChance
+          ? {use:true, saveId:pawn?.id}
+          : (R().decideVetoUse
+              ? R().decideVetoUse(s,x.holder,hoh,noms)
+              : {use:false});
+      } else {
+        decision = R().decideVetoUse
+          ? R().decideVetoUse(s,x.holder,hoh,noms)
+          : {use:Math.random()<.4,saveId:noms[0]?.id};
+      }
       if(!decision.use||!decision.saveId)continue;
       const saved=hg(s,decision.saveId);if(!saved)continue;
       saved.nominated=false;noms=noms.filter(n=>n.id!==saved.id);
@@ -456,8 +484,6 @@
         !vetoHolderIds.has(p.id)
       );
       let replacement=null;
-      const planned= s.backdoorPlanActive && s.backdoorTargetId ? hg(s,s.backdoorTargetId) : null;
-      const targetPlayedPOV = planned && s.povPlayers.includes(planned.id);
       if(planned && planned.active && !planned.safe && !targetPlayedPOV && pool.some(p=>p.id===planned.id)) replacement=planned;
       else replacement=R().pickReplacement ? R().pickReplacement(s,hoh,pool,noms.map(n=>n.id)) : pick(pool);
       if(replacement){replacement.nominated=true;noms.push(replacement);}
