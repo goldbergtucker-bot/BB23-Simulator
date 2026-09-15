@@ -67,3 +67,4 @@
   font-weight: 600;
   opacity: .9;
 }
+.weekly-summary-list{display:grid;gap:12px}.weekly-summary-card{background:#0d121b;border:1px solid var(--line);border-radius:12px;padding:16px}.weekly-summary-card h3{margin:0 0 12px;font-size:16px}.weekly-summary-rows{display:grid;gap:0}.weekly-summary-rows>div{display:grid;grid-template-columns:minmax(150px,210px) 1fr;gap:12px;padding:9px 0;border-top:1px solid #252d3c}.weekly-summary-rows>div:first-child{border-top:0}.weekly-summary-rows strong{font-size:11px;color:#aeb7c7}.weekly-summary-rows span{font-size:12px;color:#f0f2f6}@media(max-width:800px){.weekly-summary-rows>div{grid-template-columns:1fr;gap:3px}}
