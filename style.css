@@ -68,3 +68,75 @@
   opacity: .9;
 }
 .weekly-summary-list{display:grid;gap:12px}.weekly-summary-card{background:#0d121b;border:1px solid var(--line);border-radius:12px;padding:16px}.weekly-summary-card h3{margin:0 0 12px;font-size:16px}.weekly-summary-rows{display:grid;gap:0}.weekly-summary-rows>div{display:grid;grid-template-columns:minmax(150px,210px) 1fr;gap:12px;padding:9px 0;border-top:1px solid #252d3c}.weekly-summary-rows>div:first-child{border-top:0}.weekly-summary-rows strong{font-size:11px;color:#aeb7c7}.weekly-summary-rows span{font-size:12px;color:#f0f2f6}@media(max-width:800px){.weekly-summary-rows>div{grid-template-columns:1fr;gap:3px}}
+
+/* =========================================================
+   BB19-STYLE PRESENTATION PARITY — BB23
+   Finale / jury / results / mobile pass
+   ========================================================= */
+.sim-layout.results-mode{display:block!important}
+.sim-layout.results-mode .left-rail,
+.sim-layout.results-mode .right-rail,
+.sim-layout.results-mode .event-panel,
+.sim-layout.results-mode .navigator{display:none!important}
+.sim-layout.results-mode .main-stage{width:100%;max-width:1280px;margin:0 auto}
+.sim-layout.results-mode .view-tabs{margin-bottom:14px}
+.sim-layout.results-mode .tab-content{display:block!important}
+
+.jury-vote-screen{width:100%;max-width:1050px;margin:0 auto}
+.jury-vote-screen-header{text-align:center;margin:4px 0 18px}
+.jury-vote-screen-kicker{font-size:10px;font-weight:950;letter-spacing:2px;color:#75dfff}
+.jury-vote-screen-header h3{margin:5px 0;font-size:22px}
+.jury-vote-screen-header p{margin:0;color:var(--muted);font-size:12px}
+.jury-finalists-screen{display:flex;justify-content:center;gap:34px;flex-wrap:wrap;margin:0 auto 28px}
+.jury-finalists-screen .player-card{width:190px}
+.jury-finalists-screen .portrait-box{height:235px}
+.jury-voting-header{border-top:1px solid var(--line);padding-top:24px}
+.jury-vote-list{display:grid;gap:10px;max-width:920px;margin:0 auto}
+.jury-vote-row{display:grid;grid-template-columns:minmax(0,1fr) 130px minmax(0,1fr);align-items:center;gap:14px;padding:10px 14px;background:#0c111a;border:1px solid #252d3c;border-radius:10px}
+.jury-voter,.jury-target{display:flex;align-items:center;gap:10px;min-width:0}
+.jury-target{justify-content:flex-start}
+.jury-voter>div:last-child,.jury-target>div:last-child{min-width:0}
+.jury-voter span,.jury-target span{display:block;font-size:8px;letter-spacing:1px;color:#7f8ba0;font-weight:900}
+.jury-voter strong,.jury-target strong{display:block;font-size:12px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jury-vote-portrait{width:58px;height:70px;object-fit:cover;border-radius:7px;background:#202736;flex:0 0 auto}
+.jury-vote-arrow{text-align:center;font-size:8px;font-weight:950;letter-spacing:1px;color:#8e9ab0}
+.jury-no-votes{text-align:center;color:var(--muted);padding:20px}
+
+.season-results-panel{padding:24px 18px 28px}
+.season-results-panel>h2{text-align:center;font-size:30px;margin:0 0 20px}
+.final-awards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;max-width:960px;margin:0 auto 28px}
+.final-award{background:#0d121b;border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+.final-award>span{display:block;font-size:9px;font-weight:950;letter-spacing:1.3px;color:#aeb7c7;margin-bottom:8px}
+.award-portrait{width:100%;height:190px;object-fit:cover;border-radius:8px;background:#202736}
+.final-award strong,.final-award small{display:block}
+.final-award strong{font-size:15px;margin-top:8px}
+.final-award small{font-size:11px;color:#aeb7c7;margin-top:3px}
+.winner-award{border-color:#8d6a1c}.afp-award{border-color:#59647b}
+.results-subhead{text-align:center;margin:20px 0 14px;color:#cbd2df;font-size:18px}
+.final-placements-grid{display:flex;flex-direction:column;gap:18px;max-width:1220px;margin:0 auto}
+.final-placement-row{display:grid;gap:34px;justify-content:center}
+.final-placement-row.row-1,.final-placement-row.row-3{grid-template-columns:repeat(5,minmax(120px,1fr));max-width:1160px;margin:0 auto;width:100%}
+.final-placement-row.row-2{grid-template-columns:repeat(6,minmax(110px,1fr));max-width:1160px;margin:0 auto;width:100%}
+.final-placement-card{text-align:center;min-width:0}
+.final-placement-portrait{width:100%;aspect-ratio:1/1;overflow:hidden;background:#202736;border:2px solid #1d2530}
+.final-placement-img{display:block;width:100%;height:100%;object-fit:cover}
+.final-placement-card>strong{display:block;margin-top:7px;font-size:14px;line-height:1.15}
+.final-placement-card>span{display:block;font-size:13px;font-weight:800;line-height:1.2;margin-top:2px;color:#f0f2f6}
+.final-placement-card>small{display:block;font-size:12px;color:#d1d6df;margin-top:2px;font-weight:700}
+
+@media(max-width:1000px){
+  .final-placement-row.row-1,.final-placement-row.row-3{grid-template-columns:repeat(5,minmax(90px,1fr));gap:18px}
+  .final-placement-row.row-2{grid-template-columns:repeat(6,minmax(78px,1fr));gap:14px}
+}
+@media(max-width:800px){
+  .jury-finalists-screen{gap:16px}.jury-finalists-screen .player-card{width:150px}.jury-finalists-screen .portrait-box{height:190px}
+  .jury-vote-row{grid-template-columns:1fr;justify-items:center;text-align:center}.jury-voter,.jury-target{justify-content:center}.jury-vote-arrow{padding:2px 0}
+  .final-awards{grid-template-columns:1fr}.award-portrait{height:190px}
+  .final-placement-row.row-1,.final-placement-row.row-2,.final-placement-row.row-3{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;max-width:520px}
+  .final-placement-row.row-2{display:grid}
+  .final-placement-card>strong{font-size:13px}.final-placement-card>span{font-size:12px}.final-placement-card>small{font-size:11px}
+}
+@media(max-width:380px){
+  .final-placement-row.row-1,.final-placement-row.row-2,.final-placement-row.row-3{gap:10px}
+  .jury-finalists-screen .player-card{width:130px}.jury-finalists-screen .portrait-box{height:165px}
+}
