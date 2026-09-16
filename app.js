@@ -1,6 +1,12 @@
 /*
- * BIG BROTHER 23 CUSTOM SIMULATOR — V7
+ * BIG BROTHER 23 CUSTOM SIMULATOR — BB19 PARITY STAGE 1
  * BrantSteele-style presentation + custom social setup.
+ * Stage 1 keeps the BB23-specific teams/twists while adopting the finished BB19 presentation standards:
+ *   - dedicated Final Two / Jury Voting screen
+ *   - 5 / 6 / 5 Final Placements layout for the 16-player finale
+ *   - full-screen Season Results mode
+ *   - portrait/state snapshot fallback
+ *   - mobile responsive presentation
  * V7 adds:
  *   - official BB23 competition names/descriptions
  *   - editable starting relationships
@@ -42,6 +48,11 @@
   };
   const displayText = text => {
     let out = String(text ?? "");
+    const direct = (state.houseguests || []).find(h => h.id === out);
+    if (direct) return displayName(direct);
+    [...(state.houseguests || [])]
+      .sort((a,b)=>String(b.id||"").length-String(a.id||"").length)
+      .forEach(h=>{ if(h.id) out=out.split(h.id).join(displayName(h)); });
     [...(state.houseguests || [])]
       .sort((a,b)=>name(b).length-name(a).length)
       .forEach(h=>{
@@ -50,7 +61,13 @@
       });
     return out;
   };
-  const byId = (view,id) => view?.houseguests?.find(h=>h.id===id) || state.houseguests.find(h=>h.id===id);
+  const byId = (view,id) => {
+    const snap = view?.houseguests?.find(h=>h.id===id);
+    const live = state.houseguests.find(h=>h.id===id);
+    if(!snap) return live;
+    if(!snap.portraitUrl && live?.portraitUrl) return {...snap, portraitUrl:live.portraitUrl};
+    return snap;
+  };
   const ordinal = n => SeasonEngine.ordinal(n);
   const weekLabel = w => w === "Final" ? "FINALE" : w === 0 ? "MOVE-IN" : `WEEK ${w}`;
   const toastMsg = m => { toast.textContent=m; toast.classList.add("show"); clearTimeout(toastMsg.t); toastMsg.t=setTimeout(()=>toast.classList.remove("show"),2200); };
@@ -107,6 +124,37 @@
       ${context.length?`<details class="feed-context"><summary>Story context used for this day's feeds</summary>${context.map(c=>`<p><strong>${esc(c.label)}:</strong> ${esc(c.text)}</p>`).join("")}</details>`:""}
       <div class="daily-feed-cast">${pics.slice(0,12).map(p=>`<div class="daily-feed-person">${portrait(p,"daily-feed-portrait")}<span>${esc(displayName(p))}</span></div>`).join("")}</div>
       <div class="daily-feed-updates">${items.map(x=>`<article class="feed-update ${x.kind==='feed-break'?'feed-break':''}"><time>${esc(x.time)}</time><div><p>${esc(displayText(x.text))}</p>${(x.participants||[]).length?`<small>${(x.participants||[]).map(id=>byId(entry.snapshot,id)).filter(Boolean).map(p=>esc(displayName(p))).join(" · ")}</small>`:""}</div></article>`).join("")}</div>
+    </section>`;
+  }
+
+  function juryVoteScreen(entry, view) {
+    const d = entry.data || {};
+    const finalistIds = d.finalistIds || entry.finalistIds || [];
+    const finalists = finalistIds.map(id => byId(view, id)).filter(Boolean);
+    const votes = d.votes || entry.votes || [];
+    const finalCards = finalists.map(h => playerCard(h, "FINALIST", true)).join("");
+    const voteRows = votes.map(v => {
+      const juror = byId(view, v.voterId);
+      const target = byId(view, v.targetId);
+      if (!juror || !target) return "";
+      return `<article class="jury-vote-row">
+        <div class="jury-voter">${portrait(juror,"jury-vote-portrait")}<div><span>JUROR</span><strong>${esc(displayName(juror))}</strong></div></div>
+        <div class="jury-vote-arrow">VOTES FOR</div>
+        <div class="jury-target">${portrait(target,"jury-vote-portrait")}<div><span>VOTED FOR</span><strong>${esc(displayName(target))}</strong></div></div>
+      </article>`;
+    }).join("");
+    return `<section class="jury-vote-screen">
+      <header class="jury-vote-screen-header">
+        <div class="jury-vote-screen-kicker">THE FINAL TWO</div>
+        <h3>FINALISTS</h3>
+        <p>These two Houseguests are competing to become the winner of Big Brother.</p>
+      </header>
+      <div class="jury-finalists jury-finalists-screen">${finalCards}</div>
+      <header class="jury-vote-screen-header jury-voting-header">
+        <div class="jury-vote-screen-kicker">JURY VOTING</div>
+        <h3>HOW THE JURY VOTED</h3>
+      </header>
+      <div class="jury-vote-list">${voteRows || `<div class="jury-no-votes">No jury votes were recorded for this event.</div>`}</div>
     </section>`;
   }
 
@@ -176,9 +224,7 @@
       return body;
     }
     if (entry.type === "jury-vote") {
-      const votes = d.votes || [];
-      body += `<div class="vote-list jury-votes">${votes.map(v=>{const juror=byId(view,v.voterId),target=byId(view,v.targetId);return `<div class="vote-row"><div class="vote-person">${portrait(juror,"vote-portrait")}<strong>${esc(displayName(juror))}</strong></div><div class="vote-arrow">VOTES FOR</div><div class="vote-person target">${portrait(target,"vote-portrait")}<strong>${esc(displayName(target))}</strong></div></div>`}).join("")}</div>`;
-      return body;
+      return juryVoteScreen(entry, view);
     }
     if (entry.type === "eviction") {
       const evicted = byId(view, d.evictedId);
@@ -276,7 +322,7 @@
     const e=history[index], view=e.snapshot;
     eventKicker.textContent=`${weekLabel(e.week)}  •  ${(e.phase||"EVENT").replaceAll("-"," ").toUpperCase()}`;
     eventTitle.textContent=e.title;
-    eventBody.innerHTML=(e.type==="live-feed"||e.type==="live-feed-day") ? liveFeedCard(e) : `${eventData(e,view)}${eventText(e)}`;
+    eventBody.innerHTML=(e.type==="live-feed"||e.type==="live-feed-day") ? liveFeedCard(e) : ((e.type==="jury-vote"||e.type==="jury-voting") ? juryVoteScreen(e,view) : `${eventData(e,view)}${eventText(e)}`);
     eventCounter.textContent=`${index+1} / ${history.length}`;
   }
   function statusBadge(h,view){
@@ -293,6 +339,24 @@
   }
   function renderTimeline(){timeline.innerHTML=history.map((e,i)=>{const revealed=i<=pointer;const title=revealed?e.title:"Locked Event";const week=revealed?weekLabel(e.week):"UNREVEALED";return `<button class="timeline-item ${i===pointer?"selected":""} ${revealed?"revealed":"locked"}" data-index="${i}"><span>${i+1}</span><div><strong>${esc(title)}</strong><small>${esc(week)}</small></div></button>`;}).join("");}
   function resultsUnlocked(){return pointer>=0&&pointer===history.length-1&&history[pointer]?.type==="winner";}
+  function placementVoteText(h){
+    const p=Number(h?.placement||0);
+    if(p===1 || p===2){
+      const f=state.finale||{}, tally=f.votes||{};
+      const winnerId=f.winnerId, runnerId=f.runnerUpId;
+      const votes=Number(tally[h.id]||0);
+      return `${votes} Vote${votes===1?"":"s"}`;
+    }
+    if(p===3) return "Final HOH Decision";
+    const ev=history.find(e=>e.type==="eviction" && Number(e.data?.evictedPlacement||e.snapshot?.houseguests?.find(x=>x.id===e.data?.evictedId)?.placement)===p) ||
+      history.find(e=>e.type==="eviction" && e.data?.evictedId===h.id);
+    if(ev){
+      const a=Number(ev.data?.evictedVoteCount ?? ev.evictedVoteCount ?? 0);
+      const b=Number(ev.data?.stayVoteCount ?? ev.stayVoteCount ?? 0);
+      if(Number.isFinite(a)&&Number.isFinite(b)) return `${a}-${b} Vote`;
+    }
+    return h?.juryMember ? "Jury" : "";
+  }
   function renderStats(){
     if(!resultsUnlocked()){
       tabContent.innerHTML=`<div class="tab-panel results-locked"><div class="results-lock-icon">🔒</div><h2>Season Results Locked</h2><p>The final placements and winner stay hidden until you actually reach the final winner reveal.</p></div>`;
@@ -300,8 +364,13 @@
     }
     const final=state.houseguests.slice().sort((a,b)=>(a.placement||99)-(b.placement||99));
     const f=state.finale||{},winner=byId(null,f.winnerId),runner=byId(null,f.runnerUpId),afp=byId(null,f.americasFavoriteId);
-    const awardCards=`<div class="final-awards">${winner?`<div class="final-award winner-award"><span>WINNER</span>${portrait(winner,"award-portrait")}<strong>${esc(name(winner))}</strong><small>$750,000</small></div>`:""}${runner?`<div class="final-award runner-award"><span>RUNNER-UP</span>${portrait(runner,"award-portrait")}<strong>${esc(name(runner))}</strong><small>$75,000</small></div>`:""}${afp?`<div class="final-award afp-award"><span>AMERICA'S FAVORITE PLAYER</span>${portrait(afp,"award-portrait")}<strong>${esc(name(afp))}</strong><small>$50,000</small></div>`:""}</div>`;
-    tabContent.innerHTML=`<div class="tab-panel"><h2>Season Results</h2>${awardCards}<h3 class="results-subhead">Final Placements</h3><div class="results-grid">${final.map(h=>`<div class="result-card"><b>${h.placement?ordinal(h.placement):"—"}</b>${portrait(h,"result-portrait")}<strong>${esc(name(h))}</strong>${h.juryMember?"<small>Jury</small>":""}</div>`).join("")}</div></div>`;
+    const awardCards=`<div class="final-awards">${winner?`<div class="final-award winner-award"><span>WINNER</span>${portrait(winner,"award-portrait")}<strong>${esc(name(winner))}</strong><small>$750,000 · ${Number(f.votes?.[winner.id]||0)} Votes</small></div>`:""}${runner?`<div class="final-award runner-award"><span>RUNNER-UP</span>${portrait(runner,"award-portrait")}<strong>${esc(name(runner))}</strong><small>$75,000 · ${Number(f.votes?.[runner.id]||0)} Votes</small></div>`:""}${afp?`<div class="final-award afp-award"><span>AMERICA'S FAVORITE PLAYER</span>${portrait(afp,"award-portrait")}<strong>${esc(name(afp))}</strong><small>$50,000</small></div>`:""}</div>`;
+    const rows=[];
+    for(let i=0;i<final.length;i+=5){ rows.push(final.slice(i,i+5)); }
+    // The screenshot-inspired desktop composition is 5 / 6 / 5 for a 16-player cast.
+    const placementRows=final.length===16 ? [final.slice(0,5),final.slice(5,11),final.slice(11,16)] : rows;
+    const cards=placementRows.map((row,ri)=>`<div class="final-placement-row row-${ri+1}">${row.map(h=>`<article class="final-placement-card"><div class="final-placement-portrait">${portrait(h,"final-placement-img")}</div><strong>${esc(name(h))}</strong><span>${h.placement===1?"Winner":h.placement===2?"Runner Up":`${ordinal(h.placement)} Place`}</span><small>${esc(placementVoteText(h))}</small></article>`).join("")}</div>`).join("");
+    tabContent.innerHTML=`<div class="tab-panel season-results-panel"><h2>Season Results</h2>${awardCards}<h3 class="results-subhead">Final Placements</h3><div class="final-placements-grid">${cards}</div></div>`;
   }
   function renderAlliances(){
     const a=state.alliances||[];
@@ -390,7 +459,11 @@
   }
 
   function renderTab(){
-    if(activeTab==="stats")renderStats(); else if(activeTab==="weekly-summary")renderWeeklySummary(); else if(activeTab==="alliances")renderAlliances(); else {tabContent.innerHTML="";tabContent.classList.add("hidden");return;} tabContent.classList.remove("hidden");
+    const layout=document.querySelector(".sim-layout");
+    const resultsMode=activeTab!=="event";
+    layout?.classList.toggle("results-mode",resultsMode);
+    if(activeTab==="stats")renderStats(); else if(activeTab==="weekly-summary")renderWeeklySummary(); else if(activeTab==="alliances")renderAlliances(); else {tabContent.innerHTML="";tabContent.classList.add("hidden");return;}
+    tabContent.classList.remove("hidden");
   }
   function updateSeasonUI(){
     const complete=resultsUnlocked();
