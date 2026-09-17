@@ -365,11 +365,26 @@
     const final=state.houseguests.slice().sort((a,b)=>(a.placement||99)-(b.placement||99));
     const f=state.finale||{},winner=byId(null,f.winnerId),runner=byId(null,f.runnerUpId),afp=byId(null,f.americasFavoriteId);
     const awardCards=`<div class="final-awards">${winner?`<div class="final-award winner-award"><span>WINNER</span>${portrait(winner,"award-portrait")}<strong>${esc(name(winner))}</strong><small>$750,000 · ${Number(f.votes?.[winner.id]||0)} Votes</small></div>`:""}${runner?`<div class="final-award runner-award"><span>RUNNER-UP</span>${portrait(runner,"award-portrait")}<strong>${esc(name(runner))}</strong><small>$75,000 · ${Number(f.votes?.[runner.id]||0)} Votes</small></div>`:""}${afp?`<div class="final-award afp-award"><span>AMERICA'S FAVORITE PLAYER</span>${portrait(afp,"award-portrait")}<strong>${esc(name(afp))}</strong><small>$50,000</small></div>`:""}</div>`;
-    const rows=[];
-    for(let i=0;i<final.length;i+=5){ rows.push(final.slice(i,i+5)); }
-    // The screenshot-inspired desktop composition is 5 / 6 / 5 for a 16-player cast.
-    const placementRows=final.length===16 ? [final.slice(0,5),final.slice(5,11),final.slice(11,16)] : rows;
-    const cards=placementRows.map((row,ri)=>`<div class="final-placement-row row-${ri+1}">${row.map(h=>`<article class="final-placement-card"><div class="final-placement-portrait">${portrait(h,"final-placement-img")}</div><strong>${esc(name(h))}</strong><span>${h.placement===1?"Winner":h.placement===2?"Runner Up":`${ordinal(h.placement)} Place`}</span><small>${esc(placementVoteText(h))}</small></article>`).join("")}</div>`).join("");
+    /*
+     * Final Placements layout standard:
+     *   16 houseguests: 5 / 6 / 5 (BB23)
+     *   17 houseguests: 5 / 6 / 6 (BB19-compatible layout)
+     * Jury placements are 1st–11th; pre-jury begins at 12th.
+     */
+    let placementRows=[];
+    if(final.length===16){
+      placementRows=[final.slice(0,5),final.slice(5,11),final.slice(11,16)];
+    }else if(final.length===17){
+      placementRows=[final.slice(0,5),final.slice(5,11),final.slice(11,17)];
+    }else{
+      for(let i=0;i<final.length;i+=5) placementRows.push(final.slice(i,i+5));
+    }
+    const cards=placementRows.map((row,ri)=>{
+      const firstPlacement=Number(row[0]?.placement||0);
+      const isPreJury=firstPlacement>=12;
+      const divider=isPreJury && ri>0 ? `<div class="final-placement-jury-divider"><span>PRE-JURY</span></div>` : "";
+      return `${divider}<div class="final-placement-row row-${ri+1}${isPreJury?" pre-jury-row":""}">${row.map(h=>`<article class="final-placement-card"><div class="final-placement-portrait">${portrait(h,"final-placement-img")}</div><strong>${esc(name(h))}</strong><span>${h.placement===1?"Winner":h.placement===2?"Runner Up":`${ordinal(h.placement)} Place`}</span><small>${esc(placementVoteText(h))}</small></article>`).join("")}</div>`;
+    }).join("");
     tabContent.innerHTML=`<div class="tab-panel season-results-panel"><h2>Season Results</h2>${awardCards}<h3 class="results-subhead">Final Placements</h3><div class="final-placements-grid">${cards}</div></div>`;
   }
   function renderAlliances(){
